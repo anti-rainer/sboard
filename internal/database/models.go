@@ -345,10 +345,15 @@ type InboundNode struct {
 
 	// Hysteria2 配置
 	Hy2Password     string `gorm:"size:100" json:"hy2_password"`
-	Hy2UpMbps       int    `gorm:"default:100" json:"hy2_up_mbps"`
-	Hy2DownMbps     int    `gorm:"default:100" json:"hy2_down_mbps"`
+	Hy2UpMbps       int    `gorm:"default:0" json:"hy2_up_mbps"`
+	Hy2DownMbps     int    `gorm:"default:0" json:"hy2_down_mbps"`
 	Hy2Obfs         string `gorm:"size:20" json:"hy2_obfs"` // salamander or empty
 	Hy2ObfsPassword string `gorm:"size:100" json:"hy2_obfs_password"`
+
+	// TUIC 配置（QUIC 系，强制 TLS）
+	TuicPassword    string `gorm:"size:100" json:"tuic_password"`
+	TuicCongestion  string `gorm:"size:20;default:bbr" json:"tuic_congestion"` // bbr/cubic/new_reno
+	TuicZeroRtt     bool   `gorm:"default:false" json:"tuic_zero_rtt"`
 
 	// 状态
 	Enabled bool   `gorm:"default:true" json:"enabled"`
@@ -401,6 +406,14 @@ type ExternalNode struct {
 	Hy2DownMbps     int    `json:"hy2_down_mbps"`
 	Hy2Obfs         string `gorm:"size:20" json:"hy2_obfs"`
 	Hy2ObfsPassword string `gorm:"size:100" json:"hy2_obfs_password"`
+
+	// TUIC（QUIC 系，强制 TLS；udp_relay_mode 仅出站使用）
+	TuicPassword     string `gorm:"size:100" json:"tuic_password"`
+	TuicCongestion   string `gorm:"size:20" json:"tuic_congestion"`    // bbr/cubic/new_reno
+	TuicUdpRelayMode string `gorm:"size:20" json:"tuic_udp_relay_mode"` // native/quic
+
+	// Socks 密码（用户名复用 UUID 字段）
+	Password string `gorm:"size:100" json:"password"`
 
 	// 控制字段
 	Level     int    `gorm:"default:1" json:"level"`      // 使用等级（1/2/3）
@@ -596,6 +609,10 @@ type ServerOutbound struct {
 	// Hysteria2 配置
 	Obfs    string `gorm:"size:50" json:"obfs"`      // Hysteria2 obfs 类型: salamander
 	ObfsPwd string `gorm:"size:200" json:"obfs_pwd"` // Hysteria2 obfs 密码
+
+	// TUIC 配置（Password 字段复用通用 Password）
+	TuicCongestion   string `gorm:"size:20" json:"tuic_congestion"`    // bbr/cubic/new_reno
+	TuicUdpRelayMode string `gorm:"size:20" json:"tuic_udp_relay_mode"` // native/quic
 
 	// 传输层配置 (VMess/VLESS)
 	Network string `gorm:"size:20" json:"network"`  // tcp/ws/grpc/http

@@ -56,6 +56,11 @@ type CreateNodeRequest struct {
 	Hy2Obfs         string `json:"hy2_obfs"`
 	Hy2ObfsPassword string `json:"hy2_obfs_password"`
 
+	// TUIC（QUIC 系，强制 TLS）
+	TuicPassword   string `json:"tuic_password"`
+	TuicCongestion string `json:"tuic_congestion"`
+	TuicZeroRtt    bool   `json:"tuic_zero_rtt"`
+
 	// Status
 	Enabled bool   `json:"enabled"`
 	Notes   string `json:"notes"`
@@ -103,6 +108,11 @@ type UpdateNodeRequest struct {
 	Hy2DownMbps     int    `json:"hy2_down_mbps"`
 	Hy2Obfs         string `json:"hy2_obfs"`
 	Hy2ObfsPassword string `json:"hy2_obfs_password"`
+
+	// TUIC（QUIC 系，强制 TLS）
+	TuicPassword   string `json:"tuic_password"`
+	TuicCongestion string `json:"tuic_congestion"`
+	TuicZeroRtt    bool   `json:"tuic_zero_rtt"`
 
 	// Status
 	Enabled bool   `json:"enabled"`
@@ -182,7 +192,7 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 	}
 
 	// 验证协议
-	validProtocols := []string{"trojan", "vless", "vmess", "anytls", "shadowsocks", "hysteria2", "naive"}
+	validProtocols := []string{"trojan", "vless", "vmess", "anytls", "shadowsocks", "hysteria2", "tuic", "socks", "naive"}
 	isValidProtocol := false
 	for _, p := range validProtocols {
 		if req.Protocol == p {
@@ -245,11 +255,11 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 	if req.WsPath == "" {
 		req.WsPath = "/"
 	}
-	if req.Hy2UpMbps == 0 {
-		req.Hy2UpMbps = 100
+	if req.TuicCongestion == "" {
+		req.TuicCongestion = "bbr"
 	}
-	if req.Hy2DownMbps == 0 {
-		req.Hy2DownMbps = 100
+	if req.Protocol == "tuic" && req.TuicPassword == "" {
+		req.TuicPassword = generateRandomPassword(24)
 	}
 
 	// 如果启用 Reality 且 short_id 为空，自动生成随机 short_id
@@ -294,6 +304,9 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 		Hy2DownMbps:      req.Hy2DownMbps,
 		Hy2Obfs:          req.Hy2Obfs,
 		Hy2ObfsPassword:  req.Hy2ObfsPassword,
+		TuicPassword:     req.TuicPassword,
+		TuicCongestion:   req.TuicCongestion,
+		TuicZeroRtt:      req.TuicZeroRtt,
 		Enabled:          req.Enabled,
 		Notes:            req.Notes,
 	}
@@ -422,7 +435,7 @@ func (s *Server) handleUpdateNode(c *gin.Context) {
 
 	// 更新字段 — 仅在配置相关字段变化时记录
 	if req.Protocol != "" {
-		validProtocols := []string{"trojan", "vless", "vmess", "anytls", "shadowsocks", "hysteria2", "naive"}
+		validProtocols := []string{"trojan", "vless", "vmess", "anytls", "shadowsocks", "hysteria2", "tuic", "socks", "naive"}
 		isValid := false
 		for _, p := range validProtocols {
 			if req.Protocol == p {
@@ -551,6 +564,19 @@ func (s *Server) handleUpdateNode(c *gin.Context) {
 		configChanged = true
 	}
 	node.Hy2ObfsPassword = req.Hy2ObfsPassword
+
+	if req.TuicPassword != node.TuicPassword {
+		configChanged = true
+	}
+	node.TuicPassword = req.TuicPassword
+	if req.TuicCongestion != node.TuicCongestion {
+		configChanged = true
+	}
+	node.TuicCongestion = req.TuicCongestion
+	if req.TuicZeroRtt != node.TuicZeroRtt {
+		configChanged = true
+	}
+	node.TuicZeroRtt = req.TuicZeroRtt
 
 	if req.Enabled != node.Enabled {
 		configChanged = true

@@ -235,6 +235,28 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 		}
 		return fmt.Sprintf("hysteria2://%s@%s:%d?%s#%s", password, formatHostForURL(p.Host), p.Port, params.Encode(), url.PathEscape(p.Name))
 
+	case "tuic":
+		tuicPassword := p.UUID
+		if node.TuicPassword != "" {
+			tuicPassword = node.TuicPassword
+		}
+		congestion := node.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		params := url.Values{}
+		params.Set("congestion_control", congestion)
+		params.Set("udp_relay_mode", "native")
+		params.Set("alpn", "h3")
+		if node.ServerName != "" {
+			params.Set("sni", node.ServerName)
+		}
+		params.Set("allow_insecure", "1")
+		return fmt.Sprintf("tuic://%s:%s@%s:%d?%s#%s", p.UUID, tuicPassword, formatHostForURL(p.Host), p.Port, params.Encode(), url.PathEscape(p.Name))
+
+	case "socks":
+		return fmt.Sprintf("socks://%s:%s@%s:%d#%s", url.QueryEscape(p.Name), url.QueryEscape(p.UUID), formatHostForURL(p.Host), p.Port, url.PathEscape(p.Name))
+
 	case "naive":
 		params := url.Values{}
 		if node.ServerName != "" {
@@ -397,6 +419,28 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 			params.Set("obfs-password", ext.Hy2ObfsPassword)
 		}
 		return fmt.Sprintf("hysteria2://%s@%s:%d?%s#%s", ext.Hy2Password, formatHostForURL(ext.Host), ext.Port, params.Encode(), url.PathEscape(ext.Name))
+
+	case "tuic":
+		congestion := ext.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		relay := ext.TuicUdpRelayMode
+		if relay == "" {
+			relay = "native"
+		}
+		params := url.Values{}
+		params.Set("congestion_control", congestion)
+		params.Set("udp_relay_mode", relay)
+		params.Set("alpn", "h3")
+		if ext.ServerName != "" {
+			params.Set("sni", ext.ServerName)
+		}
+		params.Set("allow_insecure", "1")
+		return fmt.Sprintf("tuic://%s:%s@%s:%d?%s#%s", ext.UUID, ext.TuicPassword, formatHostForURL(ext.Host), ext.Port, params.Encode(), url.PathEscape(ext.Name))
+
+	case "socks":
+		return fmt.Sprintf("socks://%s:%s@%s:%d#%s", url.QueryEscape(ext.UUID), url.QueryEscape(ext.Password), formatHostForURL(ext.Host), ext.Port, url.PathEscape(ext.Name))
 
 	default:
 		return ""

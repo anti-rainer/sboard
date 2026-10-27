@@ -43,6 +43,10 @@ type OutboundRequest struct {
 	Obfs    string `json:"obfs"`
 	ObfsPwd string `json:"obfs_pwd"`
 
+	// TUIC（QUIC 系，强制 TLS）
+	TuicCongestion   string `json:"tuic_congestion"`
+	TuicUdpRelayMode string `json:"tuic_udp_relay_mode"`
+
 	// 传输层配置 (VMess/VLESS)
 	Network string `json:"network"`
 	WsPath  string `json:"ws_path"`
@@ -61,8 +65,15 @@ func validateOutboundRequest(req *OutboundRequest) error {
 	if req.Port < 1 || req.Port > 65535 {
 		return fmt.Errorf("出站端口必须在 1-65535 范围内")
 	}
+	// 归一化历史别名，避免存进库里的 "ss"/"socks5" 在生成配置时对不上分支
 	switch req.Protocol {
-	case "shadowsocks", "ss", "trojan", "anytls", "socks5", "vless", "vmess", "hysteria2":
+	case "ss":
+		req.Protocol = "shadowsocks"
+	case "socks5":
+		req.Protocol = "socks"
+	}
+	switch req.Protocol {
+	case "shadowsocks", "trojan", "anytls", "socks", "vless", "vmess", "hysteria2", "tuic":
 	default:
 		return fmt.Errorf("不支持的出站协议: %s", req.Protocol)
 	}
@@ -190,9 +201,11 @@ func (s *Server) handleCreateServerOutbound(c *gin.Context) {
 		PubKey:   req.PubKey,
 		ShortId:  req.ShortId,
 		Fp:       req.Fp,
-		Obfs:     req.Obfs,
-		ObfsPwd:  req.ObfsPwd,
-		Network:  req.Network,
+		Obfs:             req.Obfs,
+		ObfsPwd:          req.ObfsPwd,
+		TuicCongestion:   req.TuicCongestion,
+		TuicUdpRelayMode: req.TuicUdpRelayMode,
+		Network:          req.Network,
 		WsPath:   req.WsPath,
 		WsHost:   req.WsHost,
 	}
@@ -259,6 +272,8 @@ func (s *Server) handleUpdateServerOutbound(c *gin.Context) {
 	outbound.Fp = req.Fp
 	outbound.Obfs = req.Obfs
 	outbound.ObfsPwd = req.ObfsPwd
+	outbound.TuicCongestion = req.TuicCongestion
+	outbound.TuicUdpRelayMode = req.TuicUdpRelayMode
 	outbound.Network = req.Network
 	outbound.WsPath = req.WsPath
 	outbound.WsHost = req.WsHost

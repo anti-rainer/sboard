@@ -651,9 +651,16 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		}
 		outbound["type"] = "hysteria2"
 		outbound["password"] = password
-		outbound["up_mbps"] = node.Hy2UpMbps
-		outbound["down_mbps"] = node.Hy2DownMbps
-		outbound["tls"] = buildSingBoxTLS(node)
+		// 参照 233boy：未显式配置带宽时不输出，避免默认限速
+		if node.Hy2UpMbps > 0 {
+			outbound["up_mbps"] = node.Hy2UpMbps
+		}
+		if node.Hy2DownMbps > 0 {
+			outbound["down_mbps"] = node.Hy2DownMbps
+		}
+		hy2TLS := buildSingBoxTLS(node)
+		hy2TLS["alpn"] = []string{"h3"}
+		outbound["tls"] = hy2TLS
 		if node.Hy2Obfs != "" {
 			outbound["obfs"] = map[string]interface{}{
 				"type":     node.Hy2Obfs,
@@ -665,6 +672,29 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		outbound["type"] = "anytls"
 		outbound["password"] = p.UUID
 		outbound["tls"] = buildSingBoxTLS(node)
+
+	case "tuic":
+		outbound["type"] = "tuic"
+		tuicPassword := p.UUID
+		if node.TuicPassword != "" {
+			tuicPassword = node.TuicPassword
+		}
+		outbound["uuid"] = p.UUID
+		outbound["password"] = tuicPassword
+		congestion := node.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		outbound["congestion_control"] = congestion
+		outbound["udp_relay_mode"] = "native"
+		tuicTLS := buildSingBoxTLS(node)
+		tuicTLS["alpn"] = []string{"h3"}
+		outbound["tls"] = tuicTLS
+
+	case "socks":
+		outbound["type"] = "socks"
+		outbound["username"] = user.Name
+		outbound["password"] = p.UUID
 
 	case "naive":
 		outbound["type"] = "naive"
@@ -831,9 +861,15 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 		outbound["password"] = ext.SsPassword
 	case "hysteria2":
 		outbound["password"] = ext.Hy2Password
-		outbound["up_mbps"] = ext.Hy2UpMbps
-		outbound["down_mbps"] = ext.Hy2DownMbps
-		outbound["tls"] = buildSingBoxTLSExt(ext)
+		if ext.Hy2UpMbps > 0 {
+			outbound["up_mbps"] = ext.Hy2UpMbps
+		}
+		if ext.Hy2DownMbps > 0 {
+			outbound["down_mbps"] = ext.Hy2DownMbps
+		}
+		extHy2TLS := buildSingBoxTLSExt(ext)
+		extHy2TLS["alpn"] = []string{"h3"}
+		outbound["tls"] = extHy2TLS
 		if ext.Hy2Obfs != "" {
 			outbound["obfs"] = map[string]interface{}{
 				"type":     ext.Hy2Obfs,
@@ -845,6 +881,25 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 		if ext.TlsEnabled {
 			outbound["tls"] = buildSingBoxTLSExt(ext)
 		}
+	case "tuic":
+		outbound["uuid"] = ext.UUID
+		outbound["password"] = ext.TuicPassword
+		congestion := ext.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		outbound["congestion_control"] = congestion
+		relay := ext.TuicUdpRelayMode
+		if relay == "" {
+			relay = "native"
+		}
+		outbound["udp_relay_mode"] = relay
+		extTuicTLS := buildSingBoxTLSExt(ext)
+		extTuicTLS["alpn"] = []string{"h3"}
+		outbound["tls"] = extTuicTLS
+	case "socks":
+		outbound["username"] = ext.UUID
+		outbound["password"] = ext.Password
 	}
 	return outbound
 }

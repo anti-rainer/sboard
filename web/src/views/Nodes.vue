@@ -82,13 +82,7 @@
                 <div class="col-md-6 mb-3">
                   <label>协议</label>
                   <select class="form-select" v-model="formData.protocol" @change="onProtocolChange">
-                    <option value="trojan">Trojan</option>
-                    <option value="vless">VLESS</option>
-                    <option value="vmess">VMess</option>
-                    <option value="anytls">AnyTLS</option>
-                    <option value="shadowsocks">Shadowsocks</option>
-                    <option value="hysteria2">Hysteria2</option>
-                    <option value="naive">Naive</option>
+                    <option v-for="p in MAIN_PROTOCOLS" :key="p.id" :value="p.id">{{ p.label }}</option>
                   </select>
                 </div>
                 <div class="col-md-6 mb-3">
@@ -101,8 +95,25 @@
                 </div>
               </div>
 
+              <!-- 协议分支：胶囊选择 -->
+              <div class="mb-3" v-if="branches.length">
+                <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" v-for="b in branches" :key="b.id"
+                          class="btn btn-sm rounded-pill px-3"
+                          :class="activeBranch === b.id ? 'btn-primary' : 'btn-outline-secondary'"
+                          :title="b.hint || b.label"
+                          @click="applyBranch(b)">
+                    {{ b.label }}
+                  </button>
+                </div>
+                <small class="text-muted d-block mt-1" v-if="activeBranchHint">
+                  <i class="bi bi-info-circle"></i> {{ activeBranchHint }}
+                </small>
+              </div>
+
               <!-- TLS 配置 -->
-              <div class="form-check mb-2" v-if="formData.protocol !== 'shadowsocks' && formData.protocol !== 'naive'">
+              <div class="form-check mb-2" v-if="!['shadowsocks','naive','socks','tuic'].includes(formData.protocol)">
                 <input class="form-check-input" type="checkbox" v-model="formData.tls_enabled" id="tlsEnabled">
                 <label class="form-check-label" for="tlsEnabled">启用 TLS</label>
               </div>
@@ -161,11 +172,11 @@
               </div>
 
               <!-- 传输层配置 -->
-              <div class="form-check mb-2 mt-3" v-if="formData.protocol !== 'shadowsocks' && formData.protocol !== 'hysteria2' && formData.protocol !== 'naive'">
+              <div class="form-check mb-2 mt-3" v-if="!['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)">
                 <input class="form-check-input" type="checkbox" v-model="formData.transport_enabled" id="transportEnabled">
                 <label class="form-check-label" for="transportEnabled">启用传输层</label>
               </div>
-              <div v-if="formData.transport_enabled && formData.protocol !== 'shadowsocks' && formData.protocol !== 'hysteria2' && formData.protocol !== 'naive'" id="transportFields">
+              <div v-if="formData.transport_enabled && !['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)" id="transportFields">
                 <div class="mb-2">
                   <label>传输层类型</label>
                   <select class="form-select" v-model="formData.transport_type">
@@ -267,13 +278,13 @@
                 <div class="row mb-3">
                   <div class="col-md-6 mb-2">
                     <label>上行带宽 (Mbps)</label>
-                    <input type="number" class="form-control" v-model.number="formData.hy2_up_mbps" min="1" max="10000">
-                    <small class="text-muted">设置为实际带宽的 80-90%</small>
+                    <input type="number" class="form-control" v-model.number="formData.hy2_up_mbps" min="0" max="10000">
+                    <small class="text-muted">0 = 不限速（与 233boy 默认一致）</small>
                   </div>
                   <div class="col-md-6 mb-2">
                     <label>下行带宽 (Mbps)</label>
-                    <input type="number" class="form-control" v-model.number="formData.hy2_down_mbps" min="1" max="10000">
-                    <small class="text-muted">设置为实际带宽的 80-90%</small>
+                    <input type="number" class="form-control" v-model.number="formData.hy2_down_mbps" min="0" max="10000">
+                    <small class="text-muted">0 = 不限速（与 233boy 默认一致）</small>
                   </div>
                 </div>
                 
@@ -291,6 +302,45 @@
                     <input type="text" class="form-control" v-model="formData.hy2_obfs_password" placeholder="混淆密码（与认证密码不同）">
                     <small class="text-muted">用于混淆 QUIC 流量，防止被 DPI 识别</small>
                   </div>
+                </div>
+              </div>
+
+              <!-- TUIC 配置 -->
+              <div v-if="formData.protocol === 'tuic'" id="tuicFields" class="mt-3">
+                <div class="alert alert-info">
+                  <i class="bi bi-info-circle"></i> <strong>TUIC 配置说明：</strong>
+                  <ul class="mb-0 mt-1">
+                    <li>基于 QUIC（UDP），必须启用 TLS，ALPN 固定 h3</li>
+                    <li>拥塞控制默认 bbr，弱网下表现更好</li>
+                  </ul>
+                </div>
+                <div class="mb-2">
+                  <label>认证密码</label>
+                  <input type="text" class="form-control" v-model="formData.tuic_password" placeholder="留空则使用用户UUID">
+                  <small class="text-muted">留空时使用用户 UUID 作为密码</small>
+                </div>
+                <div class="mb-2">
+                  <label>拥塞控制算法</label>
+                  <select class="form-select" v-model="formData.tuic_congestion">
+                    <option value="bbr">bbr（推荐）</option>
+                    <option value="cubic">cubic</option>
+                    <option value="new_reno">new_reno</option>
+                  </select>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" v-model="formData.tuic_zero_rtt" id="tuicZeroRtt">
+                  <label class="form-check-label" for="tuicZeroRtt">启用 0-RTT 握手</label>
+                </div>
+              </div>
+
+              <!-- Socks 配置 -->
+              <div v-if="formData.protocol === 'socks'" id="socksFields" class="mt-3">
+                <div class="alert alert-info">
+                  <i class="bi bi-info-circle"></i> <strong>Socks5 配置说明：</strong>
+                  <ul class="mb-0 mt-1">
+                    <li>每个用户使用独立认证：用户名 = 用户名称，密码 = 用户 UUID</li>
+                    <li>不支持 TLS 与传输层</li>
+                  </ul>
                 </div>
               </div>
 
@@ -404,7 +454,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject, watch } from 'vue'
+import { ref, computed, onMounted, inject, watch } from 'vue'
+import { MAIN_PROTOCOLS, getBranches, detectBranch, type ProtocolBranch } from '@/utils/protocolBranches'
 import { Modal } from 'bootstrap'
 import { getNodes, createNode, updateNode, deleteNode, getConfig, generateRealityKeys as apiGenerateRealityKeys, type Node } from '@/api'
 
@@ -436,6 +487,51 @@ const configType = ref('sing-box')
 const configContent = ref('')
 const configLoading = ref(false)
 
+// 协议分支
+const branches = computed(() => getBranches(formData.value.protocol))
+const activeBranch = ref<string | null>(null)
+const activeBranchHint = computed(() => {
+  const b = branches.value.find((x) => x.id === activeBranch.value)
+  return b?.hint || ''
+})
+
+/** 把分支预设写入表单（不引入新字段，只按预设填既有字段） */
+function applyBranch(b: ProtocolBranch) {
+  activeBranch.value = b.id
+  const f = formData.value
+  const p = b.patch
+  if (p.tls !== undefined) f.tls_enabled = p.tls
+  if (p.reality !== undefined) f.reality_enabled = p.reality
+  if (p.transport !== undefined) {
+    if (p.transport === null) {
+      f.transport_enabled = false
+    } else {
+      f.transport_enabled = true
+      f.transport_type = p.transport
+    }
+  }
+  if (p.flow !== undefined) f.flow = p.flow
+  if (p.ssMethod !== undefined) f.ss_method = p.ssMethod
+  if (p.ssObfs !== undefined) f.ss_obfs_mode = p.ssObfs
+  if (p.hy2Obfs !== undefined) f.hy2_obfs = p.hy2Obfs
+  if (p.congestion !== undefined) f.tuic_congestion = p.congestion
+}
+
+/** 依据当前表单状态反推命中的分支 */
+function syncActiveBranch() {
+  const f = formData.value
+  activeBranch.value = detectBranch(f.protocol, {
+    tls: f.tls_enabled,
+    reality: f.reality_enabled,
+    transport: f.transport_enabled ? f.transport_type : '',
+    flow: f.flow,
+    ssMethod: f.ss_method,
+    ssObfs: f.ss_obfs_mode,
+    hy2Obfs: f.hy2_obfs,
+    congestion: f.tuic_congestion,
+  })
+}
+
 function getDefaultFormData() {
   return {
     id: 0,
@@ -463,10 +559,13 @@ function getDefaultFormData() {
     ss_obfs_mode: '',
     ss_obfs_host: '',
     hy2_password: '',
-    hy2_up_mbps: 100,
-    hy2_down_mbps: 100,
+    hy2_up_mbps: 0,
+    hy2_down_mbps: 0,
     hy2_obfs: '',
     hy2_obfs_password: '',
+    tuic_password: '',
+    tuic_congestion: 'bbr',
+    tuic_zero_rtt: false,
     notes: '',
     enabled: true
   }
@@ -515,6 +614,25 @@ function onProtocolChange() {
     formData.value.transport_enabled = false
     formData.value.reality_enabled = false
   }
+  // TUIC 基于 QUIC，强制 TLS，不支持传输层与 Reality
+  if (formData.value.protocol === 'tuic') {
+    formData.value.tls_enabled = true
+    formData.value.transport_enabled = false
+    formData.value.reality_enabled = false
+  }
+  // Socks 不支持 TLS / 传输层 / Reality
+  if (formData.value.protocol === 'socks') {
+    formData.value.tls_enabled = false
+    formData.value.transport_enabled = false
+    formData.value.reality_enabled = false
+  }
+  // 切换协议后自动套用该协议的首个分支，避免表单停留在上一种协议的组合
+  const list = getBranches(formData.value.protocol)
+  if (list.length > 0) {
+    applyBranch(list[0])
+  } else {
+    activeBranch.value = null
+  }
 }
 
 async function generateRealityKeys() {
@@ -537,6 +655,7 @@ async function generateRealityKeys() {
 function openAddModal() {
   isEditing.value = false
   formData.value = getDefaultFormData()
+  syncActiveBranch()
   nodeModal?.show()
 }
 
@@ -568,13 +687,17 @@ function openEditModal(node: Node) {
     ss_obfs_mode: node.ss_obfs_mode || '',
     ss_obfs_host: node.ss_obfs_host || '',
     hy2_password: node.hy2_password || '',
-    hy2_up_mbps: node.hy2_up_mbps || 100,
-    hy2_down_mbps: node.hy2_down_mbps || 100,
+    hy2_up_mbps: node.hy2_up_mbps || 0,
+    hy2_down_mbps: node.hy2_down_mbps || 0,
     hy2_obfs: node.hy2_obfs || '',
     hy2_obfs_password: node.hy2_obfs_password || '',
+    tuic_password: (node as any).tuic_password || '',
+    tuic_congestion: (node as any).tuic_congestion || 'bbr',
+    tuic_zero_rtt: (node as any).tuic_zero_rtt || false,
     notes: node.notes || '',
     enabled: node.enabled
   }
+  syncActiveBranch()
   nodeModal?.show()
 }
 
@@ -625,6 +748,9 @@ async function saveNode() {
       hy2_down_mbps: formData.value.hy2_down_mbps,
       hy2_obfs: formData.value.hy2_obfs,
       hy2_obfs_password: formData.value.hy2_obfs_password,
+      tuic_password: formData.value.tuic_password,
+      tuic_congestion: formData.value.tuic_congestion,
+      tuic_zero_rtt: formData.value.tuic_zero_rtt,
       notes: formData.value.notes,
       enabled: formData.value.enabled
     }

@@ -19,6 +19,7 @@ export type ProxyProtocol =
   | 'hysteria2'
   | 'anytls'
   | 'socks5'
+  | 'tuic'
 
 export interface ParsedProxy {
   protocol: ProxyProtocol
@@ -324,6 +325,7 @@ export function parseProxyLink(rawLink: string): ParsedProxy {
     ['hysteria2://', 'hysteria2'],
     ['hy2://', 'hysteria2'],
     ['anytls://', 'anytls'],
+    ['tuic://', 'tuic'],
     ['socks5://', 'socks5'],
     ['socks://', 'socks5'],
   ]
@@ -341,6 +343,7 @@ export function parseProxyLink(rawLink: string): ParsedProxy {
 
   const out: ParsedProxy = { ...EMPTY, protocol }
   if (protocol === 'hysteria2') out.port = 443
+  if (protocol === 'tuic') out.port = 443
   if (protocol === 'socks5') out.port = 1080
 
   // 分离 fragment / query
@@ -396,7 +399,7 @@ export function parseProxyLink(rawLink: string): ParsedProxy {
   applyParams(out, params)
 
   // trojan / hysteria2 / anytls 默认走 TLS
-  if (protocol === 'trojan' || protocol === 'hysteria2' || protocol === 'anytls') {
+  if (protocol === 'trojan' || protocol === 'hysteria2' || protocol === 'anytls' || protocol === 'tuic') {
     if (!out.reality) out.tls = true
     if (!out.sni) out.sni = params.get('peer') || params.get('sni') || out.host
   }
@@ -420,6 +423,16 @@ function assignUserinfo(out: ParsedProxy, userinfo: string) {
         // 若 head 不是 UUID 而 tail 是，则 head 是 encryption 前缀
         out.uuid = isUuid(tail) ? tail : userinfo
         if (head && head !== 'none' && isUuid(head)) out.uuid = head
+      } else {
+        out.uuid = userinfo
+      }
+      break
+    }
+    case 'tuic': {
+      // tuic://uuid:password@host:port
+      if (colon > -1) {
+        out.uuid = userinfo.slice(0, colon)
+        out.password = decodeURIComponent(userinfo.slice(colon + 1))
       } else {
         out.uuid = userinfo
       }

@@ -189,6 +189,18 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 		case "naive":
 			userEntry["username"] = user.Name
 			userEntry["password"] = user.UUID
+		case "tuic":
+			userEntry["uuid"] = user.UUID
+			if node.TuicPassword != "" {
+				userEntry["password"] = node.TuicPassword
+			} else {
+				userEntry["password"] = user.UUID
+			}
+		case "socks":
+			// 参照 233boy：Socks 用户结构只有 username/password，不接受 name
+			delete(userEntry, "name")
+			userEntry["username"] = user.Name
+			userEntry["password"] = user.UUID
 		}
 		userList = append(userList, userEntry)
 	}
@@ -211,13 +223,28 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 		}
 	case "hysteria2":
 		inbound.Set("users", userList)
-		inbound.Set("up_mbps", node.Hy2UpMbps)
-		inbound.Set("down_mbps", node.Hy2DownMbps)
+		// 参照 233boy：默认不设带宽上限，仅在显式配置时才限制
+		if node.Hy2UpMbps > 0 {
+			inbound.Set("up_mbps", node.Hy2UpMbps)
+		}
+		if node.Hy2DownMbps > 0 {
+			inbound.Set("down_mbps", node.Hy2DownMbps)
+		}
 		if node.Hy2Obfs == "salamander" && node.Hy2ObfsPassword != "" {
 			inbound.Set("obfs", map[string]interface{}{
 				"type":     "salamander",
 				"password": node.Hy2ObfsPassword,
 			})
+		}
+	case "tuic":
+		inbound.Set("users", userList)
+		congestion := node.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		inbound.Set("congestion_control", congestion)
+		if node.TuicZeroRtt {
+			inbound.Set("zero_rtt_handshake", true)
 		}
 	case "naive":
 		// Naive 用户列表格式不同，只需 username 和 password
@@ -235,7 +262,7 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 
 	// TLS 配置
 	// hysteria2/naive 协议必须启用 TLS（hysteria2 强制要求 TLS 加密）
-	if ((node.TlsEnabled || node.RealityEnabled) && node.Protocol != "shadowsocks") || node.Protocol == "naive" || node.Protocol == "hysteria2" {
+	if ((node.TlsEnabled || node.RealityEnabled) && node.Protocol != "shadowsocks" && node.Protocol != "socks") || node.Protocol == "naive" || node.Protocol == "hysteria2" || node.Protocol == "tuic" {
 		serverName := node.ServerName
 		if node.RealityEnabled && node.RealityServer != "" {
 			serverName = node.RealityServer
@@ -264,6 +291,11 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 			// 普通 TLS 证书配置
 			tls["certificate_path"] = "./server.crt"
 			tls["key_path"] = "./server.key"
+		}
+
+		if node.Protocol == "tuic" || node.Protocol == "hysteria2" {
+			// 参照 233boy：QUIC 系协议 ALPN 固定 h3
+			tls["alpn"] = []string{"h3"}
 		}
 
 		inbound.Set("tls", tls)
@@ -577,13 +609,28 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 		}
 	case "hysteria2":
 		inbound.Set("users", userList)
-		inbound.Set("up_mbps", node.Hy2UpMbps)
-		inbound.Set("down_mbps", node.Hy2DownMbps)
+		// 参照 233boy：默认不设带宽上限，仅在显式配置时才限制
+		if node.Hy2UpMbps > 0 {
+			inbound.Set("up_mbps", node.Hy2UpMbps)
+		}
+		if node.Hy2DownMbps > 0 {
+			inbound.Set("down_mbps", node.Hy2DownMbps)
+		}
 		if node.Hy2Obfs == "salamander" && node.Hy2ObfsPassword != "" {
 			inbound.Set("obfs", map[string]interface{}{
 				"type":     "salamander",
 				"password": node.Hy2ObfsPassword,
 			})
+		}
+	case "tuic":
+		inbound.Set("users", userList)
+		congestion := node.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		inbound.Set("congestion_control", congestion)
+		if node.TuicZeroRtt {
+			inbound.Set("zero_rtt_handshake", true)
 		}
 	case "naive":
 		// Naive 用户列表格式不同
@@ -613,7 +660,7 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 
 	// TLS 配置
 	// hysteria2/naive 协议必须启用 TLS（hysteria2 强制要求 TLS 加密）
-	if ((node.TlsEnabled || node.RealityEnabled) && node.Protocol != "shadowsocks") || node.Protocol == "naive" || node.Protocol == "hysteria2" {
+	if ((node.TlsEnabled || node.RealityEnabled) && node.Protocol != "shadowsocks" && node.Protocol != "socks") || node.Protocol == "naive" || node.Protocol == "hysteria2" || node.Protocol == "tuic" {
 		serverName := node.ServerName
 		if node.RealityEnabled && node.RealityServer != "" {
 			serverName = node.RealityServer
@@ -640,6 +687,11 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 		} else {
 			tls["certificate_path"] = "./server.crt"
 			tls["key_path"] = "./server.key"
+		}
+
+		if node.Protocol == "tuic" || node.Protocol == "hysteria2" {
+			// 参照 233boy：QUIC 系协议 ALPN 固定 h3
+			tls["alpn"] = []string{"h3"}
 		}
 
 		inbound.Set("tls", tls)
@@ -698,6 +750,18 @@ func buildUserEntry(protocol, name, uuid, flow string, node *database.InboundNod
 		} else {
 			userEntry["password"] = uuid
 		}
+	case "tuic":
+		userEntry["uuid"] = uuid
+		if node.TuicPassword != "" {
+			userEntry["password"] = node.TuicPassword
+		} else {
+			userEntry["password"] = uuid
+		}
+	case "socks":
+		// 参照 233boy：Socks 用户结构只有 username/password，不接受 name
+		delete(userEntry, "name")
+		userEntry["username"] = name
+		userEntry["password"] = uuid
 	}
 
 	return userEntry

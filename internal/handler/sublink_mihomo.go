@@ -231,6 +231,36 @@ func buildMihomoProxy(server *database.Server, node *database.InboundNode, nc *d
 			add("obfs-password", node.Hy2ObfsPassword)
 		}
 
+	case "tuic":
+		tuicPassword := p.UUID
+		if node.TuicPassword != "" {
+			tuicPassword = node.TuicPassword
+		}
+		congestion := node.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		add("type", "tuic")
+		add("name", p.Name)
+		add("server", p.Host)
+		add("port", p.Port)
+		add("uuid", p.UUID)
+		add("password", tuicPassword)
+		add("udp", true)
+		add("alpn", []string{"h3"})
+		add("congestion-controller", congestion)
+		add("udp-relay-mode", "native")
+		buildMihomoTLSOpts(node, add, true)
+
+	case "socks":
+		add("type", "socks5")
+		add("name", p.Name)
+		add("server", p.Host)
+		add("port", p.Port)
+		add("username", p.Name)
+		add("password", p.UUID)
+		add("udp", true)
+
 	default:
 		return nil
 	}
@@ -386,6 +416,36 @@ func buildMihomoProxyFromExternal(ext *database.ExternalNode) MihomoProxy {
 			add("obfs", ext.Hy2Obfs)
 			add("obfs-password", ext.Hy2ObfsPassword)
 		}
+
+	case "tuic":
+		congestion := ext.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		relay := ext.TuicUdpRelayMode
+		if relay == "" {
+			relay = "native"
+		}
+		add("type", "tuic")
+		add("name", ext.Name)
+		add("server", ext.Host)
+		add("port", ext.Port)
+		add("uuid", ext.UUID)
+		add("password", ext.TuicPassword)
+		add("udp", true)
+		add("alpn", []string{"h3"})
+		add("congestion-controller", congestion)
+		add("udp-relay-mode", relay)
+		buildMihomoTLSOptsExt(ext, add, true)
+
+	case "socks":
+		add("type", "socks5")
+		add("name", ext.Name)
+		add("server", ext.Host)
+		add("port", ext.Port)
+		add("username", ext.UUID)
+		add("password", ext.Password)
+		add("udp", true)
 
 	default:
 		return nil
