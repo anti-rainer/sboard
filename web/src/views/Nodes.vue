@@ -224,36 +224,28 @@
                 <div class="alert alert-info">
                   <i class="bi bi-info-circle"></i> <strong>Shadowsocks 2022 配置说明：</strong>
                   <ul class="mb-0 mt-1">
-                    <li>仅支持 SS2022 加密方式（支持多用户独立认证）</li>
-                    <li>每个用户拥有独立密码，到期后自动失效</li>
+                    <li>SS2022 支持多用户独立密钥，每个用户密码独立、到期自动失效</li>
+                    <li>传统加密方式为单用户共享密码（所有用户共用节点密码）</li>
                     <li>UDP 支持已默认启用（游戏、DNS）</li>
-                    <li>密码会自动生成为 base64 格式</li>
                   </ul>
                 </div>
                 <div class="mb-2">
                   <label>加密方法 <span class="text-danger">*</span></label>
                   <select class="form-select" v-model="formData.ss_method">
-                    <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm (16字节密钥)</option>
-                    <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm (推荐，32字节密钥)</option>
-                    <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305 (ARM优化，32字节密钥)</option>
+                    <optgroup label="SS2022（支持多用户独立密钥）">
+                      <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm (16字节密钥)</option>
+                      <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm (推荐，32字节密钥)</option>
+                      <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305 (ARM优化，32字节密钥)</option>
+                    </optgroup>
+                    <optgroup label="传统加密（单用户共享密码）">
+                      <option value="aes-128-gcm">aes-128-gcm</option>
+                      <option value="aes-256-gcm">aes-256-gcm</option>
+                      <option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</option>
+                      <option value="xchacha20-ietf-poly1305">xchacha20-ietf-poly1305</option>
+                    </optgroup>
                   </select>
                 </div>
 
-                <h6 class="mb-2 mt-3"><i class="bi bi-shield-lock"></i> SNI 伪装 (reF1nd sing-box)</h6>
-                <div class="mb-2">
-                  <label>伪装模式</label>
-                  <select class="form-select" v-model="formData.ss_obfs_mode">
-                    <option value="">不启用伪装</option>
-                    <option value="tls">TLS (推荐，DPI对抗)</option>
-                    <option value="http">HTTP (兼容性更好)</option>
-                  </select>
-                  <small class="text-muted">需要服务端使用 reF1nd fork 的 sing-box</small>
-                </div>
-                <div v-if="formData.ss_obfs_mode" class="mb-2">
-                  <label>伪装域名 (SNI)</label>
-                  <input type="text" class="form-control" v-model="formData.ss_obfs_host" placeholder="down.dingtalk.com">
-                  <small class="text-muted">留空则使用 Server Name</small>
-                </div>
               </div>
 
               <!-- Hysteria2 配置 -->
@@ -526,7 +518,6 @@ function syncActiveBranch() {
     transport: f.transport_enabled ? f.transport_type : '',
     flow: f.flow,
     ssMethod: f.ss_method,
-    ssObfs: f.ss_obfs_mode,
     hy2Obfs: f.hy2_obfs,
     congestion: f.tuic_congestion,
   })
@@ -556,8 +547,6 @@ function getDefaultFormData() {
     flow: '',
     ss_method: '2022-blake3-aes-256-gcm',
     ss_password: '',
-    ss_obfs_mode: '',
-    ss_obfs_host: '',
     hy2_password: '',
     hy2_up_mbps: 0,
     hy2_down_mbps: 0,
@@ -684,8 +673,6 @@ function openEditModal(node: Node) {
     flow: node.flow || '',
     ss_method: node.ss_method || '2022-blake3-aes-256-gcm',
     ss_password: node.ss_password || '',
-    ss_obfs_mode: node.ss_obfs_mode || '',
-    ss_obfs_host: node.ss_obfs_host || '',
     hy2_password: node.hy2_password || '',
     hy2_up_mbps: node.hy2_up_mbps || 0,
     hy2_down_mbps: node.hy2_down_mbps || 0,
@@ -741,8 +728,6 @@ async function saveNode() {
       flow: formData.value.flow,
       ss_method: formData.value.ss_method,
       ss_password: formData.value.ss_password,
-      ss_obfs_mode: formData.value.ss_obfs_mode,
-      ss_obfs_host: formData.value.ss_obfs_host,
       hy2_password: formData.value.hy2_password,
       hy2_up_mbps: formData.value.hy2_up_mbps,
       hy2_down_mbps: formData.value.hy2_down_mbps,

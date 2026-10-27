@@ -181,8 +181,6 @@ export interface Node {
   flow: string
   ss_method: string
   ss_password: string
-  ss_obfs_mode: string
-  ss_obfs_host: string
   hy2_password: string
   hy2_up_mbps: number
   hy2_down_mbps: number
@@ -510,8 +508,6 @@ export interface ExternalNode {
   flow: string
   ss_method: string
   ss_password: string
-  ss_obfs_mode: string
-  ss_obfs_host: string
   hy2_password: string
   hy2_up_mbps: number
   hy2_down_mbps: number

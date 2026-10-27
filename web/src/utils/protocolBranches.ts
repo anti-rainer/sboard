@@ -28,8 +28,6 @@ export interface BranchPatch {
   transport?: string | null
   flow?: string
   ssMethod?: string
-  /** '' | 'tls' | 'http' */
-  ssObfs?: string
   /** '' | 'salamander' */
   hy2Obfs?: string
   /** TUIC 拥塞控制 */
@@ -158,13 +156,15 @@ export const MAIN_PROTOCOLS: MainProtocolMeta[] = [
     id: 'shadowsocks',
     label: 'Shadowsocks',
     noTransport: true,
+    // SS 的分支维度就是加密方式本身（对齐 233boy 的 ss_method_list 全部 7 项）
     branches: [
-      { id: '2022-aes128', label: '2022-AES128', hint: '2022-blake3-aes-128-gcm（多用户）', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-128-gcm', ssObfs: '' } },
-      { id: '2022-aes256', label: '2022-AES256', hint: '2022-blake3-aes-256-gcm（多用户）', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-256-gcm', ssObfs: '' } },
-      { id: '2022-chacha20', label: '2022-ChaCha20', hint: '2022-blake3-chacha20-poly1305', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-chacha20-poly1305', ssObfs: '' } },
-      { id: 'legacy', label: 'AES-256-GCM', hint: '传统单用户加密', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-256-gcm', ssObfs: '' } },
-      { id: 'obfs-tls', label: 'AES-256-GCM + TLS 伪装', hint: 'SNI 伪装（reF1nd 扩展）', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-256-gcm', ssObfs: 'tls' } },
-      { id: 'obfs-http', label: 'AES-256-GCM + HTTP 伪装', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-256-gcm', ssObfs: 'http' } },
+      { id: 'aes-128-gcm', label: 'AES-128-GCM', hint: '传统加密，单用户共享密码', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-128-gcm' } },
+      { id: 'aes-256-gcm', label: 'AES-256-GCM', hint: '传统加密，单用户共享密码', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-256-gcm' } },
+      { id: 'chacha20-ietf-poly1305', label: 'ChaCha20-IETF', hint: '传统加密，ARM 设备友好', patch: { tls: false, reality: false, transport: null, ssMethod: 'chacha20-ietf-poly1305' } },
+      { id: 'xchacha20-ietf-poly1305', label: 'XChaCha20-IETF', hint: '传统加密，扩展 nonce', patch: { tls: false, reality: false, transport: null, ssMethod: 'xchacha20-ietf-poly1305' } },
+      { id: '2022-blake3-aes-128-gcm', label: '2022-AES128', hint: 'SS2022，支持多用户独立密钥', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-128-gcm' } },
+      { id: '2022-blake3-aes-256-gcm', label: '2022-AES256', hint: 'SS2022，支持多用户独立密钥', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-256-gcm' } },
+      { id: '2022-blake3-chacha20-poly1305', label: '2022-ChaCha20', hint: 'SS2022，ARM 优化', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-chacha20-poly1305' } },
     ],
   },
   {
@@ -202,7 +202,7 @@ export function getBranches(protocol: string): ProtocolBranch[] {
  */
 export function detectBranch(
   protocol: string,
-  state: { tls: boolean; reality: boolean; transport: string; flow: string; ssMethod?: string; ssObfs?: string; hy2Obfs?: string; congestion?: string },
+  state: { tls: boolean; reality: boolean; transport: string; flow: string; ssMethod?: string; hy2Obfs?: string; congestion?: string },
 ): string | null {
   const branches = getBranches(protocol)
   for (const b of branches) {
@@ -216,7 +216,6 @@ export function detectBranch(
 
     if (p.flow !== undefined && (p.flow || '') !== (state.flow || '')) continue
     if (p.ssMethod !== undefined && p.ssMethod !== (state.ssMethod || '')) continue
-    if (p.ssObfs !== undefined && (p.ssObfs || '') !== (state.ssObfs || '')) continue
     if (p.hy2Obfs !== undefined && (p.hy2Obfs || '') !== (state.hy2Obfs || '')) continue
     if (p.congestion !== undefined && p.congestion !== (state.congestion || '')) continue
 

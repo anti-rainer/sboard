@@ -632,17 +632,6 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		outbound["type"] = "shadowsocks"
 		outbound["method"] = node.SsMethod
 		outbound["password"] = getSS2022Password(node, p.UUID)
-		if node.SsObfsMode == "tls" || node.SsObfsMode == "http" {
-			obfsHost := node.SsObfsHost
-			if obfsHost == "" {
-				obfsHost = node.ServerName
-			}
-			if obfsHost == "" {
-				obfsHost = p.Host
-			}
-			outbound["plugin"] = "obfs-local"
-			outbound["plugin_opts"] = fmt.Sprintf("obfs=%s;obfs-host=%s", node.SsObfsMode, obfsHost)
-		}
 
 	case "hysteria2":
 		password := p.UUID

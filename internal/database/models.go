@@ -340,8 +340,6 @@ type InboundNode struct {
 	// Shadowsocks 配置
 	SsMethod   string `gorm:"size:50" json:"ss_method"`     // aes-256-gcm/chacha20-ietf-poly1305/2022-blake3-aes-256-gcm
 	SsPassword string `gorm:"size:100" json:"ss_password"`  // 随机生成的密码
-	SsObfsMode string `gorm:"size:20" json:"ss_obfs_mode"`  // tls/http (reF1nd sing-box SS SNI伪装)
-	SsObfsHost string `gorm:"size:100" json:"ss_obfs_host"` // SNI伪装域名
 
 	// Hysteria2 配置
 	Hy2Password     string `gorm:"size:100" json:"hy2_password"`
@@ -397,8 +395,6 @@ type ExternalNode struct {
 	// Shadowsocks
 	SsMethod   string `gorm:"size:50" json:"ss_method"`
 	SsPassword string `gorm:"size:100" json:"ss_password"`
-	SsObfsMode string `gorm:"size:20" json:"ss_obfs_mode"` // tls/http (reF1nd)
-	SsObfsHost string `gorm:"size:100" json:"ss_obfs_host"`
 
 	// Hysteria2
 	Hy2Password     string `gorm:"size:100" json:"hy2_password"`

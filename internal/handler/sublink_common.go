@@ -541,9 +541,8 @@ func initProxyBuildParams(server *database.Server, node *database.InboundNode, n
 // getSS2022Password 为 Shadowsocks 2022 多用户模式生成客户端密码
 // 格式: 服务器密钥:用户密钥
 func getSS2022Password(node *database.InboundNode, uuid string) string {
-	// 判断是否为 SS 2022 方法
-	if !strings.HasPrefix(node.SsMethod, "2022-") {
-		// 非 2022 方法，直接返回服务器密码
+	// 非 EIH 方法（传统加密，或 2022 chacha20 这类不支持 EIH 的）直接返回服务器密码
+	if !ssSupportsEIH(node.SsMethod) {
 		return node.SsPassword
 	}
 

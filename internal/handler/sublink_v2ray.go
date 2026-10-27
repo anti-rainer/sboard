@@ -201,23 +201,7 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 
 	case "shadowsocks":
 		userInfo := base64.StdEncoding.EncodeToString([]byte(node.SsMethod + ":" + getSS2022Password(node, p.UUID)))
-		baseURL := fmt.Sprintf("ss://%s@%s:%d", userInfo, formatHostForURL(p.Host), p.Port)
-		params := url.Values{}
-		if node.SsObfsMode == "tls" || node.SsObfsMode == "http" {
-			obfsHost := node.SsObfsHost
-			if obfsHost == "" {
-				obfsHost = node.ServerName
-			}
-			if obfsHost == "" {
-				obfsHost = p.Host
-			}
-			pluginOpts := url.QueryEscape("obfs=" + node.SsObfsMode + ";obfs-host=" + obfsHost)
-			params.Set("plugin", "obfs-local;"+pluginOpts)
-		}
-		if len(params) > 0 {
-			return baseURL + "?" + params.Encode() + "#" + url.PathEscape(p.Name)
-		}
-		return baseURL + "#" + url.PathEscape(p.Name)
+		return fmt.Sprintf("ss://%s@%s:%d#%s", userInfo, formatHostForURL(p.Host), p.Port, url.PathEscape(p.Name))
 
 	case "hysteria2":
 		password := p.UUID

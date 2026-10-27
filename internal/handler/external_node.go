@@ -98,8 +98,6 @@ func (s *Server) handleUpdateExternalNode(c *gin.Context) {
 		"flow":              updates.Flow,
 		"ss_method":         updates.SsMethod,
 		"ss_password":       updates.SsPassword,
-		"ss_obfs_mode":      updates.SsObfsMode,
-		"ss_obfs_host":      updates.SsObfsHost,
 		"hy2_password":      updates.Hy2Password,
 		"hy2_up_mbps":       updates.Hy2UpMbps,
 		"hy2_down_mbps":     updates.Hy2DownMbps,

@@ -199,20 +199,6 @@ func buildMihomoProxy(server *database.Server, node *database.InboundNode, nc *d
 		add("cipher", node.SsMethod)
 		add("password", getSS2022Password(node, p.UUID))
 		add("udp", true)
-		if node.SsObfsMode == "tls" || node.SsObfsMode == "http" {
-			obfsHost := node.SsObfsHost
-			if obfsHost == "" {
-				obfsHost = node.ServerName
-			}
-			if obfsHost == "" {
-				obfsHost = p.Host
-			}
-			add("plugin", "obfs")
-			add("plugin-opts", map[string]interface{}{
-				"mode": node.SsObfsMode,
-				"host": obfsHost,
-			})
-		}
 
 	case "hysteria2":
 		password := p.UUID
