@@ -68,6 +68,22 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
+            <!-- 快速识别：粘贴节点链接自动填充表单 -->
+            <div class="mb-3">
+              <label class="form-label">快速识别</label>
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="form-control"
+                  v-model="importLink"
+                  placeholder="粘贴节点链接：vless:// vmess:// trojan:// ss:// hysteria2:// anytls://"
+                  @keyup.enter="parseImportLink"
+                >
+                <button class="btn btn-outline-primary" type="button" @click="parseImportLink">识别</button>
+              </div>
+              <div class="form-text">支持标准链接与 base64 包裹变体（含 Reality 参数 pbk/sid/fp）</div>
+            </div>
+
             <!-- 基本信息 -->
             <div class="row mb-3">
               <div class="col-md-8">
@@ -327,6 +343,7 @@
 import { ref, computed, onMounted, inject } from 'vue'
 import { Modal } from 'bootstrap'
 import { getExternalNodes, createExternalNode, updateExternalNode, deleteExternalNode, type ExternalNode } from '../api'
+import { parseProxyLink, type ParsedProxy } from '../utils/proxyLink'
 
 const showToast = inject<any>('showToast')
 
@@ -335,6 +352,7 @@ const loading = ref(true)
 const saving = ref(false)
 const editingId = ref<number | null>(null)
 const deleteTarget = ref<ExternalNode | null>(null)
+const importLink = ref('')
 
 let modal: Modal | null = null
 let deleteModal: Modal | null = null
@@ -410,6 +428,70 @@ const loadNodes = async () => {
     showToast?.('error', '错误', '加载外部节点失败')
   } finally {
     loading.value = false
+  }
+}
+
+// 解析粘贴的节点链接并填充表单
+const parseImportLink = () => {
+  const link = importLink.value.trim()
+  if (!link) {
+    showToast?.('warning', '提示', '请先粘贴节点链接')
+    return
+  }
+
+  try {
+    const p = parseProxyLink(link)
+    if (p.protocol === 'socks5') {
+      showToast?.('warning', '不支持', '外部节点暂不支持 socks5 协议')
+      return
+    }
+    applyParsedToForm(p)
+    showToast?.('success', '成功', `已识别 ${p.protocol} 节点`)
+    importLink.value = ''
+  } catch (e: any) {
+    showToast?.('error', '识别失败', e.message || '链接格式错误')
+  }
+}
+
+// 把解析结果写入外部节点表单
+const applyParsedToForm = (p: ParsedProxy) => {
+  const v = form.value
+  if (p.name) v.name = p.name
+  v.protocol = p.protocol
+  v.host = p.host
+  v.port = p.port
+  v.uuid = p.uuid || p.password
+  v.tls_enabled = p.tls
+  v.server_name = p.sni
+  v.alpn = p.alpn
+  v.reality_enabled = p.reality
+  v.reality_pubkey = p.pubKey
+  v.reality_short_id = p.shortId
+  v.flow = p.flow
+
+  if (p.protocol === 'shadowsocks') {
+    v.ss_method = p.method
+    v.ss_password = p.password
+    v.ss_obfs_mode = p.obfs
+    v.ss_obfs_host = p.wsHost
+  }
+  if (p.protocol === 'hysteria2') {
+    v.hy2_password = p.password
+    if (p.upMbps) v.hy2_up_mbps = p.upMbps
+    if (p.downMbps) v.hy2_down_mbps = p.downMbps
+    v.hy2_obfs = p.obfs
+    v.hy2_obfs_password = p.obfsPassword
+  }
+
+  // 传输层
+  if (p.network && p.network !== 'tcp') {
+    v.transport_enabled = true
+    v.transport_type = p.network === 'h2' ? 'h2' : p.network
+    v.ws_path = p.wsPath
+    v.transport_host = p.wsHost
+    v.grpc_service = p.grpcService
+  } else {
+    v.transport_enabled = false
   }
 }
 

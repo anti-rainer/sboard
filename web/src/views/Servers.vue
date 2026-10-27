@@ -737,6 +737,7 @@
 import { ref, onMounted, onUnmounted, inject, computed } from 'vue'
 import { Modal } from 'bootstrap'
 import { getServers, createServer, updateServer, deleteServer, getNodes, deployServer, deployAll as apiDeployAll, updateAllAgents as apiUpdateAllAgents, regenerateAgentToken, getServersStatus, reorderServers, getNodeConfigs, saveNodeConfig as saveNodeConfigApi, getServerOutbounds, createServerOutbound, updateServerOutbound, deleteServerOutbound, toggleServerOutbound, type Server, type Node, type ServerStatus, type NodeConfig, type ServerOutbound } from '@/api'
+import { parseProxyLink, type ParsedProxy } from '../utils/proxyLink'
 
 const showToast = inject<(type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => void>('showToast')!
 
@@ -1047,253 +1048,47 @@ function parseOutboundImportLink() {
   }
 
   try {
-    // VMess 链接解析
-    if (link.startsWith('vmess://')) {
-      parseOutboundVmessLink(link)
-    }
-    // VLESS 链接解析
-    else if (link.startsWith('vless://')) {
-      parseOutboundVlessLink(link)
-    }
-    // Trojan 链接解析
-    else if (link.startsWith('trojan://')) {
-      parseOutboundTrojanLink(link)
-    }
-    // Shadowsocks 链接解析
-    else if (link.startsWith('ss://')) {
-      parseOutboundShadowsocksLink(link)
-    }
-    // Hysteria2 链接解析
-    else if (link.startsWith('hysteria2://') || link.startsWith('hy2://')) {
-      parseOutboundHysteria2Link(link)
-    }
-    // SOCKS5 链接解析
-    else if (link.startsWith('socks5://') || link.startsWith('socks://')) {
-      parseOutboundSocks5Link(link)
-    }
-    else {
-      showToast('error', '错误', '不支持的链接格式')
-      return
-    }
-    
-    showToast('success', '成功', '节点信息已解析')
+    const p = parseProxyLink(link)
+    applyParsedToOutbound(p)
+    showToast('success', '成功', `已识别 ${p.protocol} 节点`)
     outboundImportLink.value = ''
   } catch (error: any) {
     showToast('error', '解析失败', error.message || '链接格式错误')
   }
 }
 
-// 解析 VMess 链接到落地出站 (v2rayN 格式)
-function parseOutboundVmessLink(link: string) {
-  const base64 = link.replace('vmess://', '')
-  const decoded = atob(base64)
-  const config = JSON.parse(decoded)
-  
-  outboundData.value.protocol = 'vmess'
-  outboundData.value.host = config.add || ''
-  outboundData.value.port = parseInt(config.port) || 443
-  outboundData.value.uuid = config.id || ''
-  outboundData.value.alter_id = parseInt(config.aid) || 0
-  outboundData.value.security = config.scy || 'auto'
-  outboundData.value.tls = config.tls === 'tls'
-  outboundData.value.sni = config.sni || ''
-  outboundData.value.fp = 'chrome'
-  
-  // 备注自动填充
-  if (!outboundData.value.remark && config.ps) {
-    outboundData.value.remark = config.ps
+// 把解析结果写入落地出站表单（保留已选槽位与启用状态）
+function applyParsedToOutbound(p: ParsedProxy) {
+  const v = outboundData.value
+  v.protocol = p.protocol
+  v.host = p.host
+  v.port = p.port
+  v.uuid = p.uuid
+  v.password = p.password
+  v.username = p.username
+  if (p.protocol === 'vmess') {
+    v.security = p.method || 'auto'
+  } else if (p.method) {
+    v.method = p.method
   }
-  
-  // 传输层配置
-  const network = config.net || 'tcp'
-  outboundData.value.network = network === 'tcp' ? '' : network
-  if (network === 'ws') {
-    outboundData.value.ws_path = config.path || '/'
-    outboundData.value.ws_host = config.host || ''
-  } else if (network === 'grpc') {
-    outboundData.value.ws_path = config.path || ''
-  }
-}
-
-// 解析 VLESS 链接到落地出站
-function parseOutboundVlessLink(link: string) {
-  // vless://uuid@host:port?params#name
-  const url = new URL(link)
-  const params = new URLSearchParams(url.search)
-  
-  outboundData.value.protocol = 'vless'
-  outboundData.value.uuid = url.username
-  outboundData.value.host = url.hostname
-  outboundData.value.port = parseInt(url.port) || 443
-  outboundData.value.flow = params.get('flow') || ''
-  outboundData.value.sni = params.get('sni') || params.get('serverName') || ''
-  outboundData.value.fp = params.get('fp') || 'chrome'
-  
-  // 备注自动填充
-  if (!outboundData.value.remark && url.hash) {
-    outboundData.value.remark = decodeURIComponent(url.hash.substring(1))
-  }
-  
-  // 安全类型 (security 参数，不要和 type 传输层混淆)
-  const security = params.get('security') || ''
-  if (security === 'reality') {
-    outboundData.value.reality = true
-    outboundData.value.tls = false
-    outboundData.value.pub_key = params.get('pbk') || ''
-    outboundData.value.short_id = params.get('sid') || ''
-  } else if (security === 'tls') {
-    outboundData.value.tls = true
-    outboundData.value.reality = false
-  } else {
-    outboundData.value.tls = false
-    outboundData.value.reality = false
-  }
-  
-  // 传输层配置 (type 参数)
-  const transport = params.get('type') || 'tcp'
-  outboundData.value.network = transport === 'tcp' ? '' : transport
-  if (transport === 'ws') {
-    outboundData.value.ws_path = params.get('path') || '/'
-    outboundData.value.ws_host = params.get('host') || ''
-  } else if (transport === 'grpc') {
-    outboundData.value.ws_path = params.get('serviceName') || ''
+  v.sni = p.sni
+  v.flow = p.flow
+  v.tls = p.tls
+  v.reality = p.reality
+  v.pub_key = p.pubKey
+  v.short_id = p.shortId
+  v.fp = p.fingerprint || 'chrome'
+  v.obfs = p.obfs
+  v.obfs_pwd = p.obfsPassword
+  v.network = p.network
+  v.ws_path = p.wsPath
+  v.ws_host = p.wsHost
+  if (!v.remark && p.name) {
+    v.remark = p.name
   }
 }
 
-// 解析 Trojan 链接到落地出站
-function parseOutboundTrojanLink(link: string) {
-  // trojan://password@host:port?params#name
-  const url = new URL(link)
-  const params = new URLSearchParams(url.search)
-  
-  outboundData.value.protocol = 'trojan'
-  outboundData.value.password = decodeURIComponent(url.username)
-  outboundData.value.host = url.hostname
-  outboundData.value.port = parseInt(url.port) || 443
-  outboundData.value.tls = true  // Trojan 必须 TLS
-  outboundData.value.sni = params.get('sni') || params.get('peer') || ''
-  outboundData.value.fp = params.get('fp') || 'chrome'
-  
-  // 备注自动填充
-  if (!outboundData.value.remark && url.hash) {
-    outboundData.value.remark = decodeURIComponent(url.hash.substring(1))
-  }
-  
-  // 传输层配置
-  const transport = params.get('type') || 'tcp'
-  outboundData.value.network = transport === 'tcp' ? '' : transport
-  if (transport === 'ws') {
-    outboundData.value.ws_path = params.get('path') || '/'
-    outboundData.value.ws_host = params.get('host') || ''
-  } else if (transport === 'grpc') {
-    outboundData.value.ws_path = params.get('serviceName') || ''
-  }
-}
-
-// 解析 Shadowsocks 链接到落地出站
-function parseOutboundShadowsocksLink(link: string) {
-  // ss://base64(method:password)@host:port#name
-  // 或 ss://base64(method:password@host:port)#name
-  const withoutPrefix = link.replace('ss://', '')
-  const hashIndex = withoutPrefix.indexOf('#')
-  const mainPart = hashIndex > -1 ? withoutPrefix.substring(0, hashIndex) : withoutPrefix
-  const remarkPart = hashIndex > -1 ? withoutPrefix.substring(hashIndex + 1) : ''
-  
-  let method = '', password = '', host = '', port = 0
-  
-  if (mainPart.includes('@')) {
-    // 新格式: base64(method:password)@host:port
-    const [encoded, serverPart] = mainPart.split('@')
-    const decoded = atob(encoded)
-    const colonIndex = decoded.indexOf(':')
-    method = decoded.substring(0, colonIndex)
-    password = decoded.substring(colonIndex + 1)
-    
-    const [h, p] = serverPart.split(':')
-    host = h
-    port = parseInt(p) || 0
-  } else {
-    // 旧格式: base64(method:password@host:port)
-    const decoded = atob(mainPart)
-    const atIndex = decoded.lastIndexOf('@')
-    const userInfo = decoded.substring(0, atIndex)
-    const serverPart = decoded.substring(atIndex + 1)
-    
-    const colonIndex = userInfo.indexOf(':')
-    method = userInfo.substring(0, colonIndex)
-    password = userInfo.substring(colonIndex + 1)
-    
-    const [h, p] = serverPart.split(':')
-    host = h
-    port = parseInt(p) || 0
-  }
-  
-  outboundData.value.protocol = 'shadowsocks'
-  outboundData.value.host = host
-  outboundData.value.port = port
-  outboundData.value.method = method
-  outboundData.value.password = password
-  
-  // 备注自动填充
-  if (!outboundData.value.remark && remarkPart) {
-    outboundData.value.remark = decodeURIComponent(remarkPart)
-  }
-}
-
-// 解析 Hysteria2 链接到落地出站
-function parseOutboundHysteria2Link(link: string) {
-  // hysteria2://password@host:port?params#name
-  // hy2://password@host:port?params#name
-  const url = new URL(link.replace('hysteria2://', 'hy2://').replace('hy2://', 'http://'))
-  const params = new URLSearchParams(url.search)
-  
-  outboundData.value.protocol = 'hysteria2'
-  outboundData.value.password = decodeURIComponent(url.username)
-  outboundData.value.host = url.hostname
-  outboundData.value.port = parseInt(url.port) || 443
-  outboundData.value.tls = true  // Hysteria2 必须 TLS
-  outboundData.value.sni = params.get('sni') || ''
-  outboundData.value.obfs = params.get('obfs') || ''
-  outboundData.value.obfs_pwd = params.get('obfs-password') || ''
-  
-  // 备注自动填充
-  if (!outboundData.value.remark && url.hash) {
-    outboundData.value.remark = decodeURIComponent(url.hash.substring(1))
-  }
-}
-
-// 解析 SOCKS5 链接到落地出站
-function parseOutboundSocks5Link(link: string) {
-  // socks5://user:pass@host:port#name  或  socks://user:pass@host:port#name
-  const normalized = link.replace('socks5://', 'http://').replace('socks://', 'http://')
-  const url = new URL(normalized)
-  
-  outboundData.value.protocol = 'socks5'
-  outboundData.value.host = url.hostname
-  outboundData.value.port = parseInt(url.port) || 1080
-  outboundData.value.username = url.username ? decodeURIComponent(url.username) : ''
-  outboundData.value.password = url.password ? decodeURIComponent(url.password) : ''
-  
-  // 备注自动填充
-  if (!outboundData.value.remark && url.hash) {
-    outboundData.value.remark = decodeURIComponent(url.hash.substring(1))
-  }
-}
-
-// VLESS TLS 类型计算属性
-const vlessTlsType = computed({
-  get() {
-    if (nodeConfigData.value.outbound_reality) return 'reality'
-    if (nodeConfigData.value.outbound_tls) return 'tls'
-    return 'none'
-  },
-  set(value: string) {
-    nodeConfigData.value.outbound_tls = value === 'tls'
-    nodeConfigData.value.outbound_reality = value === 'reality'
-  }
-})
-
-// 解析导入链接
+// 解析导入链接（写入节点配置的出站字段）
 function parseImportLink() {
   const link = importLink.value.trim()
   if (!link) {
@@ -1302,206 +1097,41 @@ function parseImportLink() {
   }
 
   try {
-    // VMess 链接解析
-    if (link.startsWith('vmess://')) {
-      parseVmessLink(link)
-    }
-    // VLESS 链接解析
-    else if (link.startsWith('vless://')) {
-      parseVlessLink(link)
-    }
-    // Trojan 链接解析
-    else if (link.startsWith('trojan://')) {
-      parseTrojanLink(link)
-    }
-    // Shadowsocks 链接解析
-    else if (link.startsWith('ss://')) {
-      parseShadowsocksLink(link)
-    }
-    // Hysteria2 链接解析
-    else if (link.startsWith('hysteria2://') || link.startsWith('hy2://')) {
-      parseHysteria2Link(link)
-    }
-    // SOCKS5 链接解析
-    else if (link.startsWith('socks5://') || link.startsWith('socks://')) {
-      parseSocks5Link(link)
-    }
-    else {
-      showToast('error', '错误', '不支持的链接格式')
-      return
-    }
-    
-    showToast('success', '成功', '节点信息已解析')
+    const p = parseProxyLink(link)
+    applyParsedToNodeConfig(p)
+    showToast('success', '成功', `已识别 ${p.protocol} 节点`)
     importLink.value = ''
   } catch (error: any) {
     showToast('error', '解析失败', error.message || '链接格式错误')
   }
 }
 
-// 解析 VMess 链接 (v2rayN 格式)
-function parseVmessLink(link: string) {
-  const base64 = link.replace('vmess://', '')
-  const decoded = atob(base64)
-  const config = JSON.parse(decoded)
-  
-  nodeConfigData.value.outbound_protocol = 'vmess'
-  nodeConfigData.value.outbound_host = config.add || ''
-  nodeConfigData.value.outbound_port = parseInt(config.port) || 443
-  nodeConfigData.value.outbound_uuid = config.id || ''
-  nodeConfigData.value.outbound_alter_id = parseInt(config.aid) || 0
-  nodeConfigData.value.outbound_security = config.scy || 'auto'
-  nodeConfigData.value.outbound_tls = config.tls === 'tls'
-  nodeConfigData.value.outbound_sni = config.sni || ''
-  nodeConfigData.value.outbound_fp = 'chrome'
-  
-  // 传输层配置
-  const network = config.net || 'tcp'
-  nodeConfigData.value.outbound_network = network === 'tcp' ? '' : network
-  if (network === 'ws') {
-    nodeConfigData.value.outbound_ws_path = config.path || '/'
-    nodeConfigData.value.outbound_ws_host = config.host || ''
-  } else if (network === 'grpc') {
-    nodeConfigData.value.outbound_ws_path = config.path || ''
+// 把解析结果写入节点配置的出站字段
+function applyParsedToNodeConfig(p: ParsedProxy) {
+  const v = nodeConfigData.value
+  v.outbound_protocol = p.protocol
+  v.outbound_host = p.host
+  v.outbound_port = p.port
+  v.outbound_uuid = p.uuid
+  v.outbound_password = p.password
+  v.outbound_username = p.username
+  if (p.protocol === 'vmess') {
+    v.outbound_security = p.method || 'auto'
+  } else if (p.method) {
+    v.outbound_method = p.method
   }
-}
-
-// 解析 VLESS 链接
-function parseVlessLink(link: string) {
-  // vless://uuid@host:port?params#name
-  const url = new URL(link)
-  const params = new URLSearchParams(url.search)
-  
-  nodeConfigData.value.outbound_protocol = 'vless'
-  nodeConfigData.value.outbound_uuid = url.username
-  nodeConfigData.value.outbound_host = url.hostname
-  nodeConfigData.value.outbound_port = parseInt(url.port) || 443
-  nodeConfigData.value.outbound_flow = params.get('flow') || ''
-  nodeConfigData.value.outbound_sni = params.get('sni') || params.get('serverName') || ''
-  nodeConfigData.value.outbound_fp = params.get('fp') || 'chrome'
-  
-  // 安全类型 (security 参数，不要和 type 传输层混淆)
-  const security = params.get('security') || ''
-  if (security === 'reality') {
-    nodeConfigData.value.outbound_reality = true
-    nodeConfigData.value.outbound_tls = false
-    nodeConfigData.value.outbound_pub_key = params.get('pbk') || ''
-    nodeConfigData.value.outbound_short_id = params.get('sid') || ''
-  } else if (security === 'tls') {
-    nodeConfigData.value.outbound_tls = true
-    nodeConfigData.value.outbound_reality = false
-  } else {
-    nodeConfigData.value.outbound_tls = false
-    nodeConfigData.value.outbound_reality = false
-  }
-  
-  // 传输层配置 (type 参数)
-  const transport = params.get('type') || 'tcp'
-  nodeConfigData.value.outbound_network = transport === 'tcp' ? '' : transport
-  if (transport === 'ws') {
-    nodeConfigData.value.outbound_ws_path = params.get('path') || '/'
-    nodeConfigData.value.outbound_ws_host = params.get('host') || ''
-  } else if (transport === 'grpc') {
-    nodeConfigData.value.outbound_ws_path = params.get('serviceName') || ''
-  }
-}
-
-// 解析 Trojan 链接
-function parseTrojanLink(link: string) {
-  // trojan://password@host:port?params#name
-  const url = new URL(link)
-  const params = new URLSearchParams(url.search)
-  
-  nodeConfigData.value.outbound_protocol = 'trojan'
-  nodeConfigData.value.outbound_password = decodeURIComponent(url.username)
-  nodeConfigData.value.outbound_host = url.hostname
-  nodeConfigData.value.outbound_port = parseInt(url.port) || 443
-  nodeConfigData.value.outbound_tls = true  // Trojan 必须 TLS
-  nodeConfigData.value.outbound_sni = params.get('sni') || params.get('peer') || ''
-  nodeConfigData.value.outbound_fp = params.get('fp') || 'chrome'
-  
-  // 传输层配置
-  const transport = params.get('type') || 'tcp'
-  nodeConfigData.value.outbound_network = transport === 'tcp' ? '' : transport
-  if (transport === 'ws') {
-    nodeConfigData.value.outbound_ws_path = params.get('path') || '/'
-    nodeConfigData.value.outbound_ws_host = params.get('host') || ''
-  } else if (transport === 'grpc') {
-    nodeConfigData.value.outbound_ws_path = params.get('serviceName') || ''
-  }
-}
-
-// 解析 Shadowsocks 链接
-function parseShadowsocksLink(link: string) {
-  // ss://base64(method:password)@host:port#name
-  // 或 ss://base64(method:password@host:port)#name
-  const withoutPrefix = link.replace('ss://', '')
-  const hashIndex = withoutPrefix.indexOf('#')
-  const mainPart = hashIndex > -1 ? withoutPrefix.substring(0, hashIndex) : withoutPrefix
-  
-  let method = '', password = '', host = '', port = 0
-  
-  if (mainPart.includes('@')) {
-    // 新格式: base64(method:password)@host:port
-    const [encoded, serverPart] = mainPart.split('@')
-    const decoded = atob(encoded)
-    const colonIndex = decoded.indexOf(':')
-    method = decoded.substring(0, colonIndex)
-    password = decoded.substring(colonIndex + 1)
-    
-    const [h, p] = serverPart.split(':')
-    host = h
-    port = parseInt(p) || 0
-  } else {
-    // 旧格式: base64(method:password@host:port)
-    const decoded = atob(mainPart)
-    const atIndex = decoded.lastIndexOf('@')
-    const userInfo = decoded.substring(0, atIndex)
-    const serverPart = decoded.substring(atIndex + 1)
-    
-    const colonIndex = userInfo.indexOf(':')
-    method = userInfo.substring(0, colonIndex)
-    password = userInfo.substring(colonIndex + 1)
-    
-    const [h, p] = serverPart.split(':')
-    host = h
-    port = parseInt(p) || 0
-  }
-  
-  nodeConfigData.value.outbound_protocol = 'shadowsocks'
-  nodeConfigData.value.outbound_host = host
-  nodeConfigData.value.outbound_port = port
-  nodeConfigData.value.outbound_method = method
-  nodeConfigData.value.outbound_password = password
-}
-
-// 解析 Hysteria2 链接
-function parseHysteria2Link(link: string) {
-  // hysteria2://password@host:port?params#name
-  // hy2://password@host:port?params#name
-  const url = new URL(link.replace('hysteria2://', 'hy2://').replace('hy2://', 'http://'))
-  const params = new URLSearchParams(url.search)
-  
-  nodeConfigData.value.outbound_protocol = 'hysteria2'
-  nodeConfigData.value.outbound_password = decodeURIComponent(url.username)
-  nodeConfigData.value.outbound_host = url.hostname
-  nodeConfigData.value.outbound_port = parseInt(url.port) || 443
-  nodeConfigData.value.outbound_tls = true  // Hysteria2 必须 TLS
-  nodeConfigData.value.outbound_sni = params.get('sni') || ''
-  nodeConfigData.value.outbound_obfs = params.get('obfs') || ''
-  nodeConfigData.value.outbound_obfs_pwd = params.get('obfs-password') || ''
-}
-
-// 解析 SOCKS5 链接
-function parseSocks5Link(link: string) {
-  // socks5://user:pass@host:port#name  或  socks://user:pass@host:port#name
-  const normalized = link.replace('socks5://', 'http://').replace('socks://', 'http://')
-  const url = new URL(normalized)
-  
-  nodeConfigData.value.outbound_protocol = 'socks5'
-  nodeConfigData.value.outbound_host = url.hostname
-  nodeConfigData.value.outbound_port = parseInt(url.port) || 1080
-  nodeConfigData.value.outbound_username = url.username ? decodeURIComponent(url.username) : ''
-  nodeConfigData.value.outbound_password = url.password ? decodeURIComponent(url.password) : ''
+  v.outbound_sni = p.sni
+  v.outbound_flow = p.flow
+  v.outbound_tls = p.tls
+  v.outbound_reality = p.reality
+  v.outbound_pub_key = p.pubKey
+  v.outbound_short_id = p.shortId
+  v.outbound_fp = p.fingerprint || 'chrome'
+  v.outbound_obfs = p.obfs
+  v.outbound_obfs_pwd = p.obfsPassword
+  v.outbound_network = p.network
+  v.outbound_ws_path = p.wsPath
+  v.outbound_ws_host = p.wsHost
 }
 
 function getDefaultFormData() {

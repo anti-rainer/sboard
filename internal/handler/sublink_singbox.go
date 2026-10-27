@@ -296,7 +296,13 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 					selectedTags = overseasProxyTags
 				}
 			}
-			if len(selectedTags) > 0 && group.Type != "direct" {
+			// selector/urltest 等策略组必须至少包含一个出站，否则 sing-box
+			// 会以 "missing tags" 拒绝启动。筛不到节点时回退到 DIRECT，
+			// 保证生成的配置始终可加载。
+			if group.Type != "direct" {
+				if len(selectedTags) == 0 {
+					selectedTags = []string{"DIRECT"}
+				}
 				outbound.Set("outbounds", selectedTags)
 			}
 			if group.Type == "urltest" {
@@ -380,7 +386,7 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 		cacheFile := NewOrderedMap()
 		cacheFile.Set("enabled", tpl.Experimental.CacheFileEnabled)
 		cacheFile.Set("store_fakeip", tpl.Experimental.StoreFakeip)
-		cacheFile.Set("store_rdrc", tpl.Experimental.StoreRdrc)
+		cacheFile.Set("store_dns", tpl.Experimental.StoreDns)
 		expConfig.Set("cache_file", cacheFile)
 
 		clashAPI := NewOrderedMap()
@@ -389,17 +395,14 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 		if tpl.Experimental.ExternalUiDownloadUrl != "" {
 			clashAPI.Set("external_ui_download_url", tpl.Experimental.ExternalUiDownloadUrl)
 		}
-		if tpl.Experimental.ExternalUiHttpClient != "" {
-			clashAPI.Set("external_ui_http_client", tpl.Experimental.ExternalUiHttpClient)
+		if tpl.Experimental.ExternalUiDownloadDetour != "" {
+			clashAPI.Set("external_ui_download_detour", tpl.Experimental.ExternalUiDownloadDetour)
 		}
 		if tpl.Experimental.DefaultMode != "" {
 			clashAPI.Set("default_mode", tpl.Experimental.DefaultMode)
 		}
 		expConfig.Set("clash_api", clashAPI)
 
-		if tpl.Experimental.UrlTestUnifiedDelay {
-			expConfig.Set("urltest_unified_delay", true)
-		}
 		config.Set("experimental", expConfig)
 	}
 
@@ -470,9 +473,6 @@ func buildSingBoxRouteRule(rule SingBoxRouteRule) map[string]interface{} {
 	}
 	if rule.Outbound != "" {
 		result["outbound"] = rule.Outbound
-	}
-	if rule.Action == "resolve" && rule.MatchOnly {
-		result["match_only"] = true
 	}
 
 	switch rule.Type {

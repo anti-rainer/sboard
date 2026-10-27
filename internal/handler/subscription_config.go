@@ -279,7 +279,6 @@ type SingBoxRouteRule struct {
 	Outbound  string           `json:"outbound"`
 	Mode      string           `json:"mode"`
 	SubRules  []SingBoxSubRule `json:"subRules"`
-	MatchOnly bool             `json:"matchOnly"` // resolve action 的 match_only
 }
 
 // SingBoxSubRule SingBox 子规则
@@ -301,13 +300,12 @@ type SingBoxRuleSet struct {
 type SingBoxExperimentalConfig struct {
 	CacheFileEnabled           bool   `json:"cacheFileEnabled"`
 	StoreFakeip                bool   `json:"storeFakeip"`
-	StoreRdrc                  bool   `json:"storeRdrc"`
+	StoreDns                   bool   `json:"storeDns"`
 	ExternalController         string `json:"externalController"`
 	ExternalUi                 string `json:"externalUi"`
 	ExternalUiDownloadUrl      string `json:"externalUiDownloadUrl"`
-	ExternalUiHttpClient       string `json:"externalUiHttpClient"`
+	ExternalUiDownloadDetour   string `json:"externalUiDownloadDetour"`
 	DefaultMode                string `json:"defaultMode"`
-	UrlTestUnifiedDelay        bool   `json:"urltestUnifiedDelay"`
 }
 
 // SingBoxHttpClient HTTP 客户端配置（1.14 完整）
@@ -371,6 +369,7 @@ type MihomoConfigTemplate struct {
 	GlobalClientFingerprint string `json:"globalClientFingerprint"`
 	ExternalController      string `json:"externalController"`
 	ExternalUi              string `json:"externalUi"`
+	ExternalUiUrl           string `json:"externalUiUrl"`
 	Profile MihomoProfileConfig `json:"profile"`
 	Sniffer MihomoSnifferConfig `json:"sniffer"`
 	Tun MihomoTunConfig `json:"tun"`
