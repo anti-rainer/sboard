@@ -183,7 +183,8 @@
                     <option value="ws">WebSocket (ws)</option>
                     <option value="grpc">gRPC</option>
                     <option value="http">HTTP/2</option>
-                    <option value="httpupgrade">HTTPUpgrade (仅sing-box)</option>
+                    <option value="httpupgrade">HTTPUpgrade</option>
+                    <option value="quic">QUIC</option>
                   </select>
                 </div>
                 <!-- WebSocket / HTTPUpgrade -->

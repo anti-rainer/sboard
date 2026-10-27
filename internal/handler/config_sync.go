@@ -322,6 +322,8 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 		case "httpupgrade":
 			transport["type"] = "httpupgrade"
 			transport["path"] = node.WsPath
+		case "quic":
+			transport["type"] = "quic"
 		}
 
 		if len(transport) > 0 {
@@ -715,6 +717,8 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 		case "httpupgrade":
 			transport["type"] = "httpupgrade"
 			transport["path"] = node.WsPath
+		case "quic":
+			transport["type"] = "quic"
 		}
 
 		if len(transport) > 0 {
@@ -997,6 +1001,8 @@ func buildOutboundTransport(ob *database.ServerOutbound) map[string]interface{} 
 		if ob.WsHost != "" {
 			transport["host"] = ob.WsHost
 		}
+	case "quic":
+		transport["type"] = "quic"
 	case "http", "h2":
 		transport["type"] = "http"
 		if ob.WsHost != "" {

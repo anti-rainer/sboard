@@ -106,6 +106,7 @@ export const MAIN_PROTOCOLS: MainProtocolMeta[] = [
       { id: 'tcp', label: 'TCP', hint: '无 TLS，最轻量', patch: { tls: false, reality: false, transport: null } },
       { id: 'http', label: 'HTTP', hint: 'HTTP 伪装，无 TLS', patch: { tls: false, reality: false, transport: 'http' } },
       { id: 'ws', label: 'WS', hint: 'WebSocket，无 TLS', patch: { tls: false, reality: false, transport: 'ws' } },
+      { id: 'quic', label: 'QUIC', hint: 'QUIC 传输层（官方 1.14.4 支持）', patch: { tls: true, reality: false, transport: 'quic' } },
       { id: 'ws-tls', label: 'WS-TLS', patch: { tls: true, reality: false, transport: 'ws' } },
       { id: 'h2-tls', label: 'H2-TLS', patch: { tls: true, reality: false, transport: 'h2' } },
       { id: 'hu-tls', label: 'HTTPUpgrade-TLS', patch: { tls: true, reality: false, transport: 'httpupgrade' } },
