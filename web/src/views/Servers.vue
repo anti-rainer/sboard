@@ -486,7 +486,7 @@
 
               <!-- 导入链接 -->
               <div class="mb-3">
-                <label class="form-label small">导入节点链接 (支持 vmess/vless/trojan/ss/hysteria2/socks5)</label>
+                <label class="form-label small">导入节点链接 (支持 vmess/vless/trojan/ss/hysteria2/anytls/tuic/socks)</label>
                 <div class="input-group">
                   <input type="text" class="form-control" v-model="outboundImportLink" placeholder="粘贴节点链接，如 vmess://... vless://... trojan://... socks5://...">
                   <button class="btn btn-outline-primary" type="button" @click="parseOutboundImportLink">
@@ -498,14 +498,8 @@
               <div class="row">
                 <div class="col-4 mb-3">
                   <label class="form-label">协议</label>
-                  <select class="form-select" v-model="outboundData.protocol">
-                    <option value="shadowsocks">Shadowsocks</option>
-                    <option value="trojan">Trojan</option>
-                    <option value="socks5">SOCKS5</option>
-                    <option value="anytls">AnyTLS</option>
-                    <option value="vless">VLESS</option>
-                    <option value="vmess">VMess</option>
-                    <option value="hysteria2">Hysteria2</option>
+                  <select class="form-select" v-model="outboundData.protocol" @change="onOutboundProtocolChange">
+                    <option v-for="p in MAIN_PROTOCOLS" :key="p.id" :value="p.id">{{ p.label }}</option>
                   </select>
                 </div>
                 <div class="col-5 mb-3">
@@ -516,6 +510,23 @@
                   <label class="form-label">端口</label>
                   <input type="number" class="form-control" v-model.number="outboundData.port" min="1" max="65535">
                 </div>
+              </div>
+
+              <!-- 协议分支：胶囊选择 -->
+              <div class="mb-3" v-if="outboundBranches.length">
+                <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" v-for="b in outboundBranches" :key="b.id"
+                          class="btn btn-sm rounded-pill px-3"
+                          :class="activeOutboundBranch === b.id ? 'btn-primary' : 'btn-outline-secondary'"
+                          :title="b.hint || b.label"
+                          @click="applyOutboundBranch(b)">
+                    {{ b.label }}
+                  </button>
+                </div>
+                <small class="text-muted d-block mt-1" v-if="activeOutboundBranchHint">
+                  <i class="bi bi-info-circle"></i> {{ activeOutboundBranchHint }}
+                </small>
               </div>
 
               <!-- Shadowsocks 配置 -->
@@ -554,15 +565,20 @@
                 </div>
               </div>
 
-              <!-- SOCKS5 配置 -->
-              <div class="row" v-if="outboundData.protocol === 'socks5'">
-                <div class="col-6 mb-3">
-                  <label class="form-label">用户名 (可选)</label>
-                  <input type="text" class="form-control" v-model="outboundData.username" placeholder="用户名">
+              <!-- SOCKS 配置 -->
+              <div v-if="outboundData.protocol === 'socks' || outboundData.protocol === 'socks5'">
+                <div class="row">
+                  <div class="col-6 mb-3">
+                    <label class="form-label">用户名 (可选)</label>
+                    <input type="text" class="form-control" v-model="outboundData.username" placeholder="用户名">
+                  </div>
+                  <div class="col-6 mb-3">
+                    <label class="form-label">密码 (可选)</label>
+                    <input type="text" class="form-control" v-model="outboundData.password" placeholder="密码">
+                  </div>
                 </div>
-                <div class="col-6 mb-3">
-                  <label class="form-label">密码 (可选)</label>
-                  <input type="text" class="form-control" v-model="outboundData.password" placeholder="密码">
+                <div class="alert alert-light border py-2 px-3 small mb-3">
+                  <i class="bi bi-info-circle"></i> Socks5 出站仅支持「用户名 + 密码」认证，不支持 TLS、Reality 与传输层；两者都留空即为免认证。
                 </div>
               </div>
 
@@ -582,7 +598,7 @@
                   </div>
                 </div>
                 <div class="row">
-                  <div class="col-4 mb-3">
+                  <div class="col-4 mb-3" v-if="outboundSupportsTls">
                     <label class="form-label">安全类型</label>
                     <select class="form-select" v-model="outboundVlessTlsType">
                       <option value="none">无</option>
@@ -617,20 +633,21 @@
                 </div>
                 <!-- 传输层配置 -->
                 <div class="row">
-                  <div class="col-4 mb-3">
+                  <div class="col-4 mb-3" v-if="outboundSupportsTransport">
                     <label class="form-label">传输层</label>
                     <select class="form-select" v-model="outboundData.network">
                       <option value="">tcp (默认)</option>
                       <option value="ws">WebSocket</option>
                       <option value="grpc">gRPC</option>
                       <option value="http">HTTP/2</option>
+                      <option value="httpupgrade">HTTPUpgrade</option>
                     </select>
                   </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws'">
+                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
                     <label class="form-label">WS Path</label>
                     <input type="text" class="form-control" v-model="outboundData.ws_path" placeholder="/">
                   </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws'">
+                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
                     <label class="form-label">WS Host</label>
                     <input type="text" class="form-control" v-model="outboundData.ws_host" placeholder="可选">
                   </div>
@@ -659,7 +676,7 @@
                     <input type="number" class="form-control" v-model.number="outboundData.alter_id" min="0" placeholder="0">
                   </div>
                 </div>
-                <div class="row">
+                <div class="row" v-if="outboundSupportsTls">
                   <div class="col-4 mb-3">
                     <div class="form-check mt-4">
                       <input type="checkbox" class="form-check-input" v-model="outboundData.tls" id="vmessTls">
@@ -672,20 +689,21 @@
                   </div>
                 </div>
                 <div class="row">
-                  <div class="col-4 mb-3">
+                  <div class="col-4 mb-3" v-if="outboundSupportsTransport">
                     <label class="form-label">传输层</label>
                     <select class="form-select" v-model="outboundData.network">
                       <option value="">tcp (默认)</option>
                       <option value="ws">WebSocket</option>
                       <option value="grpc">gRPC</option>
                       <option value="http">HTTP/2</option>
+                      <option value="httpupgrade">HTTPUpgrade</option>
                     </select>
                   </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws'">
+                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
                     <label class="form-label">WS Path</label>
                     <input type="text" class="form-control" v-model="outboundData.ws_path" placeholder="/">
                   </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws'">
+                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
                     <label class="form-label">WS Host</label>
                     <input type="text" class="form-control" v-model="outboundData.ws_host" placeholder="可选">
                   </div>
@@ -718,6 +736,44 @@
                   </div>
                 </div>
               </div>
+
+              <!-- TUIC 配置 -->
+              <div v-if="outboundData.protocol === 'tuic'">
+                <div class="row">
+                  <div class="col-6 mb-3">
+                    <label class="form-label">UUID</label>
+                    <input type="text" class="form-control" v-model="outboundData.uuid" placeholder="TUIC UUID">
+                  </div>
+                  <div class="col-6 mb-3">
+                    <label class="form-label">密码</label>
+                    <input type="text" class="form-control" v-model="outboundData.password" placeholder="TUIC 密码">
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-4 mb-3">
+                    <label class="form-label">拥塞控制</label>
+                    <select class="form-select" v-model="outboundData.tuic_congestion">
+                      <option value="bbr">bbr</option>
+                      <option value="cubic">cubic</option>
+                      <option value="new_reno">new_reno</option>
+                    </select>
+                  </div>
+                  <div class="col-4 mb-3">
+                    <label class="form-label">UDP 转发模式</label>
+                    <select class="form-select" v-model="outboundData.tuic_udp_relay_mode">
+                      <option value="native">native</option>
+                      <option value="quic">quic</option>
+                    </select>
+                  </div>
+                  <div class="col-4 mb-3">
+                    <label class="form-label">SNI (可选)</label>
+                    <input type="text" class="form-control" v-model="outboundData.sni" placeholder="TLS SNI">
+                  </div>
+                </div>
+                <div class="alert alert-light border py-2 px-3 small mb-3">
+                  <i class="bi bi-lock"></i> TUIC 基于 QUIC，TLS 强制开启，不支持 Reality 与传输层。
+                </div>
+              </div>
             </form>
           </div>
           <div class="modal-footer">
@@ -738,6 +794,7 @@ import { ref, onMounted, onUnmounted, inject, computed } from 'vue'
 import { Modal } from 'bootstrap'
 import { getServers, createServer, updateServer, deleteServer, getNodes, deployServer, deployAll as apiDeployAll, updateAllAgents as apiUpdateAllAgents, regenerateAgentToken, getServersStatus, reorderServers, getNodeConfigs, saveNodeConfig as saveNodeConfigApi, getServerOutbounds, createServerOutbound, updateServerOutbound, deleteServerOutbound, toggleServerOutbound, type Server, type Node, type ServerStatus, type NodeConfig, type ServerOutbound } from '@/api'
 import { parseProxyLink, type ParsedProxy } from '../utils/proxyLink'
+import { MAIN_PROTOCOLS, getBranches, detectBranch, type ProtocolBranch } from '@/utils/protocolBranches'
 
 const showToast = inject<(type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => void>('showToast')!
 
@@ -903,9 +960,22 @@ const serverOutbounds = ref<ServerOutbound[]>([])
 const isEditingOutbound = ref(false)
 const savingOutbound = ref(false)
 const outboundImportLink = ref('')
-const outboundData = ref(getDefaultOutboundData())
+const outboundData = ref<OutboundForm>(getDefaultOutboundData())
 
-function getDefaultOutboundData(): Partial<ServerOutbound> {
+/** 落地出站表单：在 ServerOutbound 基础上补上后端已支持、但 API 类型里尚未声明的 TUIC 字段 */
+type OutboundForm = Partial<ServerOutbound> & {
+  tuic_congestion?: string
+  tuic_udp_relay_mode?: string
+}
+
+/** 兼容历史别名：ss→shadowsocks、socks5→socks（与后端归一化保持一致） */
+function normalizeOutboundProtocol(protocol?: string): string {
+  if (protocol === 'ss') return 'shadowsocks'
+  if (protocol === 'socks5') return 'socks'
+  return protocol || 'shadowsocks'
+}
+
+function getDefaultOutboundData(): OutboundForm {
   return {
     slot: 0,
     enabled: true,
@@ -930,7 +1000,9 @@ function getDefaultOutboundData(): Partial<ServerOutbound> {
     obfs_pwd: '',
     network: '',
     ws_path: '',
-    ws_host: ''
+    ws_host: '',
+    tuic_congestion: 'bbr',
+    tuic_udp_relay_mode: 'native'
   }
 }
 
@@ -944,8 +1016,81 @@ const outboundVlessTlsType = computed({
   set(value: string) {
     outboundData.value.tls = value === 'tls'
     outboundData.value.reality = value === 'reality'
+    syncActiveOutboundBranch()
   }
 })
+
+// 落地出站：协议分支（先选主协议，再选该协议的具体分支）
+const outboundBranches = computed(() => getBranches(outboundData.value.protocol || ''))
+const activeOutboundBranch = ref<string | null>(null)
+const activeOutboundBranchHint = computed(() => {
+  const b = outboundBranches.value.find((x) => x.id === activeOutboundBranch.value)
+  return b?.hint || ''
+})
+
+// Socks 不支持 TLS/Reality/传输层；只有 VLESS/VMess 有传输层
+const outboundSupportsTls = computed(() => !['socks', 'socks5'].includes(outboundData.value.protocol || ''))
+const outboundSupportsTransport = computed(() => ['vless', 'vmess'].includes(outboundData.value.protocol || ''))
+
+/** 把分支预设写入出站表单（不引入新字段，只按预设填既有字段） */
+function applyOutboundBranch(b: ProtocolBranch) {
+  activeOutboundBranch.value = b.id
+  const v = outboundData.value
+  const p = b.patch
+  if (p.tls !== undefined) v.tls = p.tls
+  if (p.reality !== undefined) v.reality = p.reality
+  if (p.transport !== undefined) {
+    // 出站表单用 http 表示 HTTP/2，其余传输层名称与契约一致
+    v.network = p.transport === null ? '' : (p.transport === 'h2' ? 'http' : p.transport)
+  }
+  if (p.flow !== undefined) v.flow = p.flow
+  if (p.ssMethod !== undefined) v.method = p.ssMethod
+  if (p.hy2Obfs !== undefined) v.obfs = p.hy2Obfs
+  if (p.congestion !== undefined) v.tuic_congestion = p.congestion
+}
+
+/** 依据当前表单状态反推命中的分支（编辑已有落地时高亮） */
+function syncActiveOutboundBranch() {
+  const v = outboundData.value
+  const network = v.network || ''
+  const base = {
+    tls: !!v.tls,
+    reality: !!v.reality,
+    flow: v.flow || '',
+    ssMethod: v.method || '',
+    hy2Obfs: v.obfs || '',
+    congestion: v.tuic_congestion || ''
+  }
+  // 契约里 HTTP/2 的写法不统一（VLESS/Trojan 用 h2，VMess 用 http），两种都试一次
+  activeOutboundBranch.value =
+    detectBranch(v.protocol || '', { ...base, transport: network === 'http' ? 'h2' : network }) ||
+    (network === 'http' ? detectBranch(v.protocol || '', { ...base, transport: 'http' }) : null)
+}
+
+/** 切换主协议：先收敛能力边界，再套用该协议的首个分支 */
+function onOutboundProtocolChange() {
+  const v = outboundData.value
+  const protocol = v.protocol || ''
+  if (protocol === 'tuic') {
+    // TUIC 基于 QUIC，TLS 强制开启，不支持 Reality 与传输层
+    v.tls = true
+    v.reality = false
+    v.network = ''
+    if (!v.tuic_congestion) v.tuic_congestion = 'bbr'
+    if (!v.tuic_udp_relay_mode) v.tuic_udp_relay_mode = 'native'
+  } else if (protocol === 'socks' || protocol === 'socks5') {
+    // Socks 不支持 TLS / Reality / 传输层
+    v.tls = false
+    v.reality = false
+    v.network = ''
+  }
+  const list = getBranches(protocol)
+  if (list.length > 0) {
+    applyOutboundBranch(list[0])
+  } else {
+    activeOutboundBranch.value = null
+  }
+}
 
 // 加载服务器的落地出站列表
 async function loadServerOutbounds() {
@@ -975,14 +1120,32 @@ function openAddOutboundModal() {
   isEditingOutbound.value = false
   outboundData.value = getDefaultOutboundData()
   outboundImportLink.value = ''
+  // 新增时套用默认协议的首个分支，保证胶囊与字段一致
+  const list = getBranches(outboundData.value.protocol || '')
+  if (list.length > 0) {
+    applyOutboundBranch(list[0])
+  } else {
+    activeOutboundBranch.value = null
+  }
   outboundModal?.show()
 }
 
 // 打开编辑落地出站模态框
 function openEditOutboundModal(outbound: ServerOutbound) {
   isEditingOutbound.value = true
-  outboundData.value = { ...outbound }
+  const extra = outbound as OutboundForm
+  const protocol = normalizeOutboundProtocol(outbound.protocol)
+  outboundData.value = {
+    ...outbound,
+    protocol,
+    // TUIC 基于 QUIC，TLS 恒为开启
+    tls: protocol === 'tuic' ? true : outbound.tls,
+    tuic_congestion: extra.tuic_congestion || 'bbr',
+    tuic_udp_relay_mode: extra.tuic_udp_relay_mode || 'native'
+  }
   outboundImportLink.value = ''
+  // 编辑时按已存字段反推分支，高亮到命中的胶囊
+  syncActiveOutboundBranch()
   outboundModal?.show()
 }
 
@@ -999,11 +1162,17 @@ async function saveOutbound() {
   
   savingOutbound.value = true
   try {
+    // 显式带上 TUIC 字段，避免后端落回默认值
+    const payload: OutboundForm = {
+      ...outboundData.value,
+      tuic_congestion: outboundData.value.tuic_congestion || 'bbr',
+      tuic_udp_relay_mode: outboundData.value.tuic_udp_relay_mode || 'native'
+    }
     if (isEditingOutbound.value && outboundData.value.slot) {
-      await updateServerOutbound(formData.value.id, outboundData.value.slot, outboundData.value)
+      await updateServerOutbound(formData.value.id, outboundData.value.slot, payload)
       showToast('success', '成功', '落地出站已更新')
     } else {
-      await createServerOutbound(formData.value.id, outboundData.value)
+      await createServerOutbound(formData.value.id, payload)
       showToast('success', '成功', '落地出站已添加')
     }
     outboundModal?.hide()
@@ -1060,7 +1229,8 @@ function parseOutboundImportLink() {
 // 把解析结果写入落地出站表单（保留已选槽位与启用状态）
 function applyParsedToOutbound(p: ParsedProxy) {
   const v = outboundData.value
-  v.protocol = p.protocol
+  // 解析器输出 socks5/ss 等历史别名，统一归一化到主协议 id
+  v.protocol = normalizeOutboundProtocol(p.protocol)
   v.host = p.host
   v.port = p.port
   v.uuid = p.uuid
@@ -1086,6 +1256,14 @@ function applyParsedToOutbound(p: ParsedProxy) {
   if (!v.remark && p.name) {
     v.remark = p.name
   }
+  // TUIC 的拥塞控制与 UDP 转发模式链接里未必带，给默认值保证可用
+  if (v.protocol === 'tuic') {
+    v.tuic_congestion = v.tuic_congestion || 'bbr'
+    v.tuic_udp_relay_mode = v.tuic_udp_relay_mode || 'native'
+    v.tls = true
+  }
+  // 导入后同步分支胶囊高亮
+  syncActiveOutboundBranch()
 }
 
 // 解析导入链接（写入节点配置的出站字段）

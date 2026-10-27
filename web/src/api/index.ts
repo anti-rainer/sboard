@@ -397,6 +397,9 @@ export interface ServerOutbound {
   // Hysteria2 配置
   obfs: string
   obfs_pwd: string
+  // TUIC 配置（password 复用通用 password 字段）
+  tuic_congestion: string
+  tuic_udp_relay_mode: string
   // 传输层配置
   network: string
   ws_path: string
@@ -513,6 +516,10 @@ export interface ExternalNode {
   hy2_down_mbps: number
   hy2_obfs: string
   hy2_obfs_password: string
+  tuic_password: string
+  tuic_congestion: string
+  tuic_udp_relay_mode: string
+  password: string
   level: number
   enabled: boolean
   sort_order: number

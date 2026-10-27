@@ -76,7 +76,7 @@
                   type="text"
                   class="form-control"
                   v-model="importLink"
-                  placeholder="粘贴节点链接：vless:// vmess:// trojan:// ss:// hysteria2:// anytls://"
+                  placeholder="粘贴节点链接：vless:// vmess:// trojan:// ss:// hysteria2:// tuic:// anytls:// socks5://"
                   @keyup.enter="parseImportLink"
                 >
                 <button class="btn btn-outline-primary" type="button" @click="parseImportLink">识别</button>
@@ -92,16 +92,28 @@
               </div>
               <div class="col-md-4">
                 <label class="form-label">协议</label>
-                <select class="form-select" v-model="form.protocol">
+                <select class="form-select" v-model="form.protocol" @change="onProtocolChange">
                   <option value="">请选择</option>
-                  <option value="vmess">VMess</option>
-                  <option value="vless">VLESS</option>
-                  <option value="trojan">Trojan</option>
-                  <option value="shadowsocks">Shadowsocks</option>
-                  <option value="hysteria2">Hysteria2</option>
-                  <option value="anytls">AnyTLS</option>
+                  <option v-for="p in MAIN_PROTOCOLS" :key="p.id" :value="p.id">{{ p.label }}</option>
                 </select>
               </div>
+            </div>
+
+            <!-- 协议分支：先选主协议，再选具体分支 -->
+            <div class="mb-3" v-if="branches.length">
+              <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" v-for="b in branches" :key="b.id"
+                        class="btn btn-sm rounded-pill px-3"
+                        :class="activeBranch === b.id ? 'btn-primary' : 'btn-outline-secondary'"
+                        :title="b.hint || b.label"
+                        @click="applyBranch(b)">
+                  {{ b.label }}
+                </button>
+              </div>
+              <small class="text-muted d-block mt-1" v-if="activeBranchHint">
+                <i class="bi bi-info-circle"></i> {{ activeBranchHint }}
+              </small>
             </div>
 
             <div class="row mb-3">
@@ -119,19 +131,22 @@
               </div>
             </div>
 
-            <!-- 认证信息 -->
-            <div class="mb-3" v-if="form.protocol">
+            <!-- 认证信息（Socks 在下方 Socks5 设置里单独填写用户名/密码） -->
+            <div class="mb-3" v-if="form.protocol && !isSocks">
               <label class="form-label">{{ protocolAuthLabel }}</label>
               <input type="text" class="form-control" v-model="form.uuid" :placeholder="protocolAuthPlaceholder">
             </div>
 
-            <!-- VMess/VLESS/Trojan 特有 -->
-            <div v-if="['vmess','vless','trojan','anytls'].includes(form.protocol)" class="card mb-3">
+            <!-- TLS 设置（Socks 不支持；TUIC 强制启用） -->
+            <div v-if="tlsVisible" class="card mb-3">
               <div class="card-header">TLS 设置</div>
               <div class="card-body">
-                <div class="form-check form-switch mb-2">
+                <div class="form-check form-switch mb-2" v-if="!isTuic">
                   <input class="form-check-input" type="checkbox" v-model="form.tls_enabled" id="extTlsEnabled">
                   <label class="form-check-label" for="extTlsEnabled">启用 TLS</label>
+                </div>
+                <div class="alert alert-secondary py-2 mb-2 small" v-else>
+                  <i class="bi bi-lock-fill"></i> TUIC 基于 QUIC，强制启用 TLS（ALPN 固定 h3）
                 </div>
                 <template v-if="form.tls_enabled">
                   <div class="row mb-2">
@@ -190,20 +205,6 @@
                     <input type="text" class="form-control" v-model="form.ss_password">
                   </div>
                 </div>
-                <div class="row mb-2">
-                  <div class="col-md-6">
-                    <label class="form-label">混淆模式 (reF1nd)</label>
-                    <select class="form-select" v-model="form.ss_obfs_mode">
-                      <option value="">不混淆</option>
-                      <option value="tls">TLS (simple-obfs)</option>
-                      <option value="http">HTTP (simple-obfs)</option>
-                    </select>
-                  </div>
-                  <div class="col-md-6" v-if="form.ss_obfs_mode">
-                    <label class="form-label">伪装域名</label>
-                    <input type="text" class="form-control" v-model="form.ss_obfs_host" placeholder="gw.alicdn.com">
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -243,8 +244,64 @@
               </div>
             </div>
 
-            <!-- 传输层设置 -->
-            <div v-if="['vmess','vless','trojan'].includes(form.protocol)" class="card mb-3">
+            <!-- TUIC 特有 -->
+            <div v-if="isTuic" class="card mb-3">
+              <div class="card-header">TUIC 设置</div>
+              <div class="card-body">
+                <div class="alert alert-info py-2 mb-3 small">
+                  <i class="bi bi-info-circle"></i>
+                  TUIC 基于 QUIC（UDP），强制启用 TLS、ALPN 固定 h3，不支持 Reality 与传输层。
+                </div>
+                <div class="row mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label">认证密码</label>
+                    <input type="text" class="form-control" v-model="form.tuic_password" placeholder="留空则使用 UUID">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">拥塞控制</label>
+                    <select class="form-select" v-model="form.tuic_congestion">
+                      <option value="bbr">bbr（推荐）</option>
+                      <option value="cubic">cubic</option>
+                      <option value="new_reno">new_reno</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="row mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label">UDP 转发模式</label>
+                    <select class="form-select" v-model="form.tuic_udp_relay_mode">
+                      <option value="native">native（原生，推荐）</option>
+                      <option value="quic">quic（QUIC 隧道）</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Socks 特有 -->
+            <div v-if="isSocks" class="card mb-3">
+              <div class="card-header">Socks5 设置</div>
+              <div class="card-body">
+                <div class="alert alert-info py-2 mb-3 small">
+                  <i class="bi bi-info-circle"></i>
+                  后端复用字段存储 Socks5 凭据：<strong>用户名写入 UUID 字段</strong>，<strong>密码写入 Password 字段</strong>。
+                  Socks5 不支持 TLS、Reality 与传输层。
+                </div>
+                <div class="row mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-control" v-model="form.uuid" placeholder="socks-user">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">密码</label>
+                    <input type="text" class="form-control" v-model="form.password" placeholder="your-password">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 传输层设置（Socks 不支持） -->
+            <div v-if="transportVisible" class="card mb-3">
               <div class="card-header">传输层设置</div>
               <div class="card-body">
                 <div class="form-check form-switch mb-2">
@@ -344,6 +401,7 @@ import { ref, computed, onMounted, inject } from 'vue'
 import { Modal } from 'bootstrap'
 import { getExternalNodes, createExternalNode, updateExternalNode, deleteExternalNode, type ExternalNode } from '../api'
 import { parseProxyLink, type ParsedProxy } from '../utils/proxyLink'
+import { MAIN_PROTOCOLS, getBranches, detectBranch, type ProtocolBranch } from '../utils/protocolBranches'
 
 const showToast = inject<any>('showToast')
 
@@ -359,12 +417,22 @@ let deleteModal: Modal | null = null
 const modalEl = ref<HTMLElement | null>(null)
 const deleteModalEl = ref<HTMLElement | null>(null)
 
-const defaultForm = (): Partial<ExternalNode> => ({
+/** 外部节点表单：后端已支持 TUIC / Socks 字段，api 类型暂未声明，这里补上 */
+type ExternalNodeForm = Partial<ExternalNode> & {
+  tuic_password?: string
+  tuic_congestion?: string
+  tuic_udp_relay_mode?: string
+  /** Socks5 密码（用户名复用 uuid 字段） */
+  password?: string
+}
+
+const defaultForm = (): ExternalNodeForm => ({
   name: '',
   protocol: '',
   host: '',
   port: 443,
   uuid: '',
+  password: '',
   tls_enabled: false,
   server_name: '',
   alpn: '',
@@ -379,13 +447,14 @@ const defaultForm = (): Partial<ExternalNode> => ({
   flow: '',
   ss_method: '',
   ss_password: '',
-  ss_obfs_mode: '',
-  ss_obfs_host: '',
   hy2_password: '',
   hy2_up_mbps: 100,
   hy2_down_mbps: 100,
   hy2_obfs: '',
   hy2_obfs_password: '',
+  tuic_password: '',
+  tuic_congestion: 'bbr',
+  tuic_udp_relay_mode: 'native',
   level: 1,
   enabled: true,
   sort_order: 0,
@@ -393,7 +462,88 @@ const defaultForm = (): Partial<ExternalNode> => ({
   notes: ''
 })
 
-const form = ref<Partial<ExternalNode>>(defaultForm())
+const form = ref<ExternalNodeForm>(defaultForm())
+
+const isTuic = computed(() => form.value.protocol === 'tuic')
+const isSocks = computed(() => form.value.protocol === 'socks')
+/** TLS 卡：Socks 不支持；TUIC 强制启用 */
+const tlsVisible = computed(() => ['vmess', 'vless', 'trojan', 'anytls', 'tuic'].includes(form.value.protocol || ''))
+/** 传输层卡：仅 VMess/VLESS/Trojan，Socks 不支持 */
+const transportVisible = computed(
+  () => ['vmess', 'vless', 'trojan'].includes(form.value.protocol || '') && !isSocks.value
+)
+
+// ===== 协议分支 =====
+const branches = computed(() => getBranches(form.value.protocol || ''))
+const activeBranch = ref<string | null>(null)
+const activeBranchHint = computed(() => {
+  const b = branches.value.find((x) => x.id === activeBranch.value)
+  return b?.hint || ''
+})
+
+/** 把分支预设写入表单（不引入新字段，只按预设填既有字段） */
+function applyBranch(b: ProtocolBranch) {
+  activeBranch.value = b.id
+  const f = form.value
+  const p = b.patch
+  if (p.tls !== undefined) f.tls_enabled = p.tls
+  if (p.reality !== undefined) f.reality_enabled = p.reality
+  if (p.transport !== undefined) {
+    if (p.transport === null) {
+      f.transport_enabled = false
+    } else {
+      f.transport_enabled = true
+      f.transport_type = p.transport
+    }
+  }
+  if (p.flow !== undefined) f.flow = p.flow
+  if (p.ssMethod !== undefined) f.ss_method = p.ssMethod
+  if (p.hy2Obfs !== undefined) f.hy2_obfs = p.hy2Obfs
+  if (p.congestion !== undefined) f.tuic_congestion = p.congestion
+  enforceProtocolConstraints()
+}
+
+/** 协议硬约束：TUIC 强制 TLS；Socks 不支持 TLS / Reality / 传输层 */
+function enforceProtocolConstraints() {
+  const f = form.value
+  if (f.protocol === 'tuic') {
+    f.tls_enabled = true
+    f.reality_enabled = false
+    f.transport_enabled = false
+    if (!f.tuic_congestion) f.tuic_congestion = 'bbr'
+    if (!f.tuic_udp_relay_mode) f.tuic_udp_relay_mode = 'native'
+  }
+  if (f.protocol === 'socks') {
+    f.tls_enabled = false
+    f.reality_enabled = false
+    f.transport_enabled = false
+  }
+}
+
+/** 依据当前表单状态反推命中的分支（编辑已有节点时高亮） */
+function syncActiveBranch() {
+  const f = form.value
+  activeBranch.value = detectBranch(f.protocol || '', {
+    tls: !!f.tls_enabled,
+    reality: !!f.reality_enabled,
+    transport: f.transport_enabled ? f.transport_type || '' : '',
+    flow: f.flow || '',
+    ssMethod: f.ss_method,
+    hy2Obfs: f.hy2_obfs,
+    congestion: f.tuic_congestion
+  })
+}
+
+/** 切换协议：先套硬约束，再落到该协议的首个分支 */
+function onProtocolChange() {
+  enforceProtocolConstraints()
+  const list = branches.value
+  if (list.length > 0) {
+    applyBranch(list[0])
+  } else {
+    activeBranch.value = null
+  }
+}
 
 const protocolAuthLabel = computed(() => {
   const m: Record<string, string> = {
@@ -402,7 +552,9 @@ const protocolAuthLabel = computed(() => {
     trojan: '密码',
     shadowsocks: 'UUID (用户标识)',
     hysteria2: 'UUID (用户标识)',
-    anytls: '密码'
+    anytls: '密码',
+    tuic: 'UUID (用户标识)',
+    socks: '用户名'
   }
   return m[form.value.protocol || ''] || '认证信息'
 })
@@ -414,7 +566,9 @@ const protocolAuthPlaceholder = computed(() => {
     trojan: 'your-password',
     anytls: 'your-password',
     shadowsocks: '00000000-0000-...',
-    hysteria2: '00000000-0000-...'
+    hysteria2: '00000000-0000-...',
+    tuic: '00000000-0000-...',
+    socks: 'socks-user'
   }
   return m[form.value.protocol || ''] || ''
 })
@@ -441,10 +595,6 @@ const parseImportLink = () => {
 
   try {
     const p = parseProxyLink(link)
-    if (p.protocol === 'socks5') {
-      showToast?.('warning', '不支持', '外部节点暂不支持 socks5 协议')
-      return
-    }
     applyParsedToForm(p)
     showToast?.('success', '成功', `已识别 ${p.protocol} 节点`)
     importLink.value = ''
@@ -457,10 +607,13 @@ const parseImportLink = () => {
 const applyParsedToForm = (p: ParsedProxy) => {
   const v = form.value
   if (p.name) v.name = p.name
-  v.protocol = p.protocol
+  // socks5 链接映射到后端的 socks 协议
+  v.protocol = p.protocol === 'socks5' ? 'socks' : p.protocol
   v.host = p.host
   v.port = p.port
-  v.uuid = p.uuid || p.password
+  // Socks5：用户名为 uuid 字段，密码为 password 字段
+  v.uuid = p.protocol === 'socks5' ? (p.username || p.uuid) : (p.uuid || p.password)
+  v.password = p.protocol === 'socks5' ? p.password : ''
   v.tls_enabled = p.tls
   v.server_name = p.sni
   v.alpn = p.alpn
@@ -472,8 +625,6 @@ const applyParsedToForm = (p: ParsedProxy) => {
   if (p.protocol === 'shadowsocks') {
     v.ss_method = p.method
     v.ss_password = p.password
-    v.ss_obfs_mode = p.obfs
-    v.ss_obfs_host = p.wsHost
   }
   if (p.protocol === 'hysteria2') {
     v.hy2_password = p.password
@@ -481,6 +632,11 @@ const applyParsedToForm = (p: ParsedProxy) => {
     if (p.downMbps) v.hy2_down_mbps = p.downMbps
     v.hy2_obfs = p.obfs
     v.hy2_obfs_password = p.obfsPassword
+  }
+  if (p.protocol === 'tuic') {
+    v.tuic_password = p.password
+    if (!v.tuic_congestion) v.tuic_congestion = 'bbr'
+    if (!v.tuic_udp_relay_mode) v.tuic_udp_relay_mode = 'native'
   }
 
   // 传输层
@@ -493,17 +649,24 @@ const applyParsedToForm = (p: ParsedProxy) => {
   } else {
     v.transport_enabled = false
   }
+
+  // 识别结果同样受协议硬约束，并同步分支高亮
+  enforceProtocolConstraints()
+  syncActiveBranch()
 }
 
 const openAddModal = () => {
   editingId.value = null
   form.value = defaultForm()
+  activeBranch.value = null
   if (modal) modal.show()
 }
 
 const openEditModal = (node: ExternalNode) => {
   editingId.value = node.id
-  form.value = { ...node }
+  form.value = { ...defaultForm(), ...node }
+  enforceProtocolConstraints()
+  syncActiveBranch()
   if (modal) modal.show()
 }
 
@@ -514,11 +677,19 @@ const saveNode = async () => {
   }
   saving.value = true
   try {
+    // 显式带上 TUIC / Socks 字段，避免后端 map 更新时丢失
+    const payload: ExternalNodeForm = {
+      ...form.value,
+      tuic_password: form.value.tuic_password || '',
+      tuic_congestion: form.value.tuic_congestion || 'bbr',
+      tuic_udp_relay_mode: form.value.tuic_udp_relay_mode || 'native',
+      password: form.value.password || ''
+    }
     if (editingId.value) {
-      await updateExternalNode(editingId.value, form.value)
+      await updateExternalNode(editingId.value, payload)
       showToast?.('success', '成功', '外部节点已更新')
     } else {
-      await createExternalNode(form.value)
+      await createExternalNode(payload)
       showToast?.('success', '成功', '外部节点已添加')
     }
     modal?.hide()

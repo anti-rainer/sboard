@@ -834,7 +834,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		}
 		outbound["tls"] = tls
 
-	case "socks5":
+	case "socks", "socks5":
 		outbound["type"] = "socks"
 		if ob.Username != "" {
 			outbound["username"] = ob.Username
@@ -938,6 +938,30 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 			}
 		}
 
+	case "tuic":
+		outbound["type"] = "tuic"
+		outbound["uuid"] = ob.UUID
+		outbound["password"] = ob.Password
+		congestion := ob.TuicCongestion
+		if congestion == "" {
+			congestion = "bbr"
+		}
+		outbound["congestion_control"] = congestion
+		relay := ob.TuicUdpRelayMode
+		if relay == "" {
+			relay = "native"
+		}
+		outbound["udp_relay_mode"] = relay
+		tls := map[string]interface{}{
+			"enabled":  true,
+			"insecure": true,
+			"alpn":     []string{"h3"},
+		}
+		if ob.Sni != "" {
+			tls["server_name"] = ob.Sni
+		}
+		outbound["tls"] = tls
+
 	default:
 		outbound["type"] = ob.Protocol
 	}
@@ -964,6 +988,14 @@ func buildOutboundTransport(ob *database.ServerOutbound) map[string]interface{} 
 	case "grpc":
 		if ob.WsPath != "" {
 			transport["service_name"] = ob.WsPath
+		}
+	case "httpupgrade":
+		transport["type"] = "httpupgrade"
+		if ob.WsPath != "" {
+			transport["path"] = ob.WsPath
+		}
+		if ob.WsHost != "" {
+			transport["host"] = ob.WsHost
 		}
 	case "http", "h2":
 		transport["type"] = "http"
