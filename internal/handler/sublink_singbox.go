@@ -36,7 +36,8 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 			if serverConfigs, ok := nodeConfigs[swn.Server.ID]; ok {
 				nc = serverConfigs[node.ID]
 			}
-			outbound := buildSingBoxOutbound(&swn.Server, &node, nc, user, lv, nil)
+			nodeName := buildNodeName(&swn.Server, user, lv, &node, swn.MultiNode)
+			outbound := buildSingBoxOutbound(&swn.Server, &node, nc, user, lv, &ProxyCustomOptions{CustomName: nodeName})
 			if outbound != nil {
 				nodeOutbounds = append(nodeOutbounds, outbound)
 				tag := safeStringFromMap(outbound, "tag")
@@ -63,7 +64,7 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 					continue
 				}
 				customOpts := &ProxyCustomOptions{
-					CustomName: swn.Server.Name + "-" + ob.Remark,
+					CustomName: nodeName + "-" + ob.Remark,
 					CustomUUID: extraUUID,
 				}
 				outboundProxy := buildSingBoxOutbound(&swn.Server, &node, nc, user, lv, customOpts)

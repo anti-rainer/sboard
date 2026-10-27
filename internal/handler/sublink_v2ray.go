@@ -24,8 +24,9 @@ func generateV2RaySubscription(servers []ServerWithNodes, nodeConfigs map[uint]m
 				nc = serverConfigs[node.ID]
 			}
 
-			// 生成直连节点（使用主 UUID）
-			link := buildV2RayLink(&swn.Server, &node, nc, user, lv, nil)
+			// 生成直连节点（使用主 UUID）；多节点服务器用节点级命名保证唯一
+			nodeName := buildNodeName(&swn.Server, user, lv, &node, swn.MultiNode)
+			link := buildV2RayLink(&swn.Server, &node, nc, user, lv, &ProxyCustomOptions{CustomName: nodeName})
 			if link != "" {
 				links = append(links, link)
 			}
@@ -40,7 +41,7 @@ func generateV2RaySubscription(servers []ServerWithNodes, nodeConfigs map[uint]m
 					continue
 				}
 				customOpts := &ProxyCustomOptions{
-					CustomName: swn.Server.Name + "-" + ob.Remark,
+					CustomName: nodeName + "-" + ob.Remark,
 					CustomUUID: extraUUID,
 				}
 				outboundLink := buildV2RayLink(&swn.Server, &node, nc, user, lv, customOpts)
