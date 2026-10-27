@@ -796,7 +796,10 @@ function New-WindowsService {
     }
     
     # 创建服务
-    $binPathEscaped = "`"$binaryPath`" -c `"$configPath`""
+    # 必须显式传 -d：Windows 服务工作目录是 System32，只给 -c 时
+    # 数据目录会落到 System32\data，与安装时 -init-admin 写入的库不是同一个。
+    $dataDir = Join-Path $InstallDir "data"
+    $binPathEscaped = "`"$binaryPath`" -c `"$configPath`" -d `"$dataDir`""
     sc.exe create $SERVICE_NAME binPath= $binPathEscaped start= auto DisplayName= "SBoard Panel" | Out-Null
     
     # 设置服务描述

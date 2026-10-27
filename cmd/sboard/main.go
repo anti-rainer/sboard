@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -55,9 +56,36 @@ func main() {
 		os.Exit(0)
 	}
 
+	// -d 带默认值，无法用空值判断是否显式传入，用 flag.Visit 精确判定。
+	dataDirSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "d" {
+			dataDirSet = true
+		}
+	})
+
 	// 如果未指定配置文件路径，使用数据目录下的 config.yaml
 	if configPath == "" {
-		configPath = fmt.Sprintf("%s/config.yaml", dataDir)
+		configPath = filepath.Join(dataDir, "config.yaml")
+	}
+
+	// 先加载配置：数据目录必须在初始化数据库之前确定，否则配置里的
+	// data.dir 会被 -d 的默认值覆盖。Windows 服务工作目录是 System32，
+	// 一旦被覆盖数据库就会落到 System32\data，与安装时写入的不是同一个库。
+	cfg, err := config.LoadOrCreate(configPath)
+	if err != nil {
+		log.Fatalf("加载配置失败: %v", err)
+	}
+
+	// 数据目录优先级：显式 -d > 配置文件 data.dir > 默认 data
+	if dataDirSet {
+		cfg.Data.Dir = dataDir
+	} else if cfg.Data.Dir != "" {
+		dataDir = cfg.Data.Dir
+	}
+	if dataDir == "" {
+		dataDir = "data"
+		cfg.Data.Dir = dataDir
 	}
 
 	// 确保数据目录存在
@@ -66,7 +94,7 @@ func main() {
 	}
 
 	// 初始化数据库
-	dbPath := fmt.Sprintf("%s/sboard.db", dataDir)
+	dbPath := filepath.Join(dataDir, "sboard.db")
 	if err := database.Init(dbPath); err != nil {
 		log.Fatalf("数据库初始化失败: %v", err)
 	}
@@ -91,18 +119,9 @@ func main() {
 
 	log.Printf("SBoard %s 启动中...", Version)
 
-	// 加载配置；首次启动时持久化默认配置，避免 JWT 密钥随重启变化。
-	cfg, err := config.LoadOrCreate(configPath)
-	if err != nil {
-		log.Fatalf("加载配置失败: %v", err)
-	}
-
 	// 命令行参数覆盖
 	if listenAddr != "" {
 		cfg.Server.Listen = listenAddr
-	}
-	if dataDir != "" {
-		cfg.Data.Dir = dataDir
 	}
 
 	// 初始化 GeoIP 数据库（如果不存在会自动从 GitHub 下载）

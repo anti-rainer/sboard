@@ -20,7 +20,7 @@ NC='\033[0m'
 
 # GitHub 加速
 GH_PROXY="https://ghfast.top/"
-REPO_URL="${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts"
+REPO_URL="https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts"
 
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -48,12 +48,17 @@ detect_os() {
 # 下载并执行 Linux 脚本
 run_linux_uninstaller() {
     info "检测到 Linux/macOS 系统，下载卸载脚本..."
-    
-    if ! curl -fsSL --connect-timeout 10 "${GH_PROXY}${REPO_URL}/uninstall-agent.sh" -o /tmp/uninstall-agent.sh; then
-        error "下载卸载脚本失败"
+
+    # REPO_URL 不含加速前缀，前缀在这里拼接；代理失败时回退直连。
+    local url="${REPO_URL}/uninstall-agent.sh"
+    if ! curl -fsSL --connect-timeout 10 "${GH_PROXY}${url}" -o /tmp/uninstall-agent.sh; then
+        warning "加速下载失败，尝试直连..."
+        if ! curl -fsSL --connect-timeout 10 "${url}" -o /tmp/uninstall-agent.sh; then
+            error "下载卸载脚本失败"
+        fi
     fi
     info "下载成功"
-    
+
     chmod +x /tmp/uninstall-agent.sh
     bash /tmp/uninstall-agent.sh "$@"
     rm -f /tmp/uninstall-agent.sh

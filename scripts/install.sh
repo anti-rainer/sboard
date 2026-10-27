@@ -19,8 +19,14 @@ case "$(uname -s 2>/dev/null)" in
         TMP_SCRIPT=$(mktemp)
         curl -fsSL "$SCRIPT_URL" -o "$TMP_SCRIPT"
         chmod +x "$TMP_SCRIPT"
-        # 重定向 stdin 到终端，保持交互能力
-        bash "$TMP_SCRIPT" </dev/tty
+        # 透传全部参数给子脚本；有终端时把 stdin 接回终端以保留交互能力，
+        # 无终端（CI/管道）时直接执行，避免 /dev/tty 打不开而失败。
+        if { exec 3<>/dev/tty; } 2>/dev/null; then
+            exec 3>&-
+            bash "$TMP_SCRIPT" "$@" </dev/tty
+        else
+            bash "$TMP_SCRIPT" "$@"
+        fi
         rm -f "$TMP_SCRIPT"
         ;;
     MINGW*|MSYS*|CYGWIN*)

@@ -24,8 +24,11 @@ NC='\033[0m'
 # 配置
 AGENT_SERVICE="sboard-agent"
 CORE_SERVICES=("sing-box")
-AGENT_INSTALL_DIR="/opt/sboard-agent"
-CORE_INSTALL_DIRS=("/root/sing-box" "/opt/sing-box")
+# 与 install-agent.sh 的 INSTALL_DIR 保持一致
+AGENT_INSTALL_DIR="/opt/sboard/agent"
+# 面板通过 deploy_core 把核心装到 /opt/sboard/sing-box；
+# 后两个是旧版安装位置，一并清理避免残留。
+CORE_INSTALL_DIRS=("/opt/sboard/sing-box" "/root/sing-box" "/opt/sing-box")
 
 # Init 系统类型
 INIT_SYSTEM=""
