@@ -9,7 +9,7 @@
 #   - procd (OpenWrt)
 #   - init.d/SysVinit (老版本系统)
 #
-# 用法: curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent.sh | bash
+# 用法: curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.sh | bash
 
 set -e
 

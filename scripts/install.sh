@@ -4,13 +4,13 @@
 # 自动检测平台并下载执行对应的安装脚本
 #
 # 用法:
-#   curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install.sh | bash
+#   curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
 
 set -e
 
 # GitHub 配置
 GH_PROXY="https://ghfast.top/"
-SCRIPT_URL="${GH_PROXY}https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.sh"
+SCRIPT_URL="${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"
 
 # 检测操作系统
 case "$(uname -s 2>/dev/null)" in
@@ -26,7 +26,7 @@ case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*)
         echo "检测到 Windows 环境，请使用 PowerShell 安装:"
         echo ""
-        echo "  irm ${GH_PROXY}https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.ps1 | iex"
+        echo "  irm ${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex"
         echo ""
         ;;
     *)

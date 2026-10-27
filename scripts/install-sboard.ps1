@@ -7,7 +7,7 @@
 #     .\install-sboard.ps1
 #
 #   方式2: 通过管道安装
-#     irm https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.ps1 | iex
+#     irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
 #
 #   方式3: 带参数运行
 #     .\install-sboard.ps1 -Install -Port 9000 -User admin -Pass mypassword
@@ -51,7 +51,7 @@ param(
 )
 
 # 配置
-$GITHUB_REPO = "amuae/sboard"
+$GITHUB_REPO = "anti-rainer/sboard"
 $SERVICE_NAME = "sboard"
 $BINARY_NAME = "sboard.exe"
 $CONFIG_FILE = "config.yaml"
@@ -539,13 +539,13 @@ function Get-SboardLogs {
 
 function Update-Sboard {
     Write-Host "正在更新 SBoard..." -ForegroundColor Cyan
-    irm https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
+    irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
     & "$env:TEMP\install-sboard.ps1" -Update
 }
 
 function Uninstall-Sboard {
     Write-Host "正在卸载 SBoard..." -ForegroundColor Cyan
-    irm https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
+    irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
     & "$env:TEMP\install-sboard.ps1" -Uninstall
 }
 

@@ -1307,7 +1307,7 @@ func (a *Agent) handleSelfUpdate(_ *Message) {
 	log.Printf("开始自我更新 (平台: %s/%s)", runtime.GOOS, runtime.GOARCH)
 
 	// 确定下载 URL
-	// 格式: https://github.com/amuae/sboard/releases/latest/download/sboard-agent_{os}_{arch}.zip
+	// 格式: https://github.com/anti-rainer/sboard/releases/latest/download/sboard-agent_{os}_{arch}.zip
 	osName := runtime.GOOS
 	archName := runtime.GOARCH
 
@@ -1337,7 +1337,7 @@ func (a *Agent) handleSelfUpdate(_ *Message) {
 
 	// ZIP 继续使用加速地址，校验文件从 GitHub 直取，避免下载代理同时
 	// 控制制品和校验值。
-	releaseURL := fmt.Sprintf("https://github.com/amuae/sboard/releases/%s", releaseType)
+	releaseURL := fmt.Sprintf("https://github.com/anti-rainer/sboard/releases/%s", releaseType)
 	downloadURL := fmt.Sprintf("https://ghfast.top/%s/%s", releaseURL, zipFileName)
 	checksumsURL := releaseURL + "/checksums.txt"
 

@@ -9,7 +9,7 @@
 #   - init.d/SysVinit (老版本系统)
 #
 # 用法: 
-#   curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh | bash
 #   curl -fsSL <url> | bash -s -- --port 9000 --user admin --pass mypassword
 #   ./install-sboard.sh --path /opt/sboard --port 8080 --user admin --pass your-password
 
@@ -24,7 +24,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 配置 (可通过参数覆盖)
-GITHUB_REPO="amuae/sboard"
+GITHUB_REPO="anti-rainer/sboard"
 INSTALL_DIR="/opt/sboard"
 DATA_DIR=""  # 默认为 INSTALL_DIR/data
 SERVICE_NAME="sboard"
@@ -846,7 +846,7 @@ do_logs() {
 do_update() {
     echo -e "${CYAN}正在更新 SBoard...${NC}"
     local tmp_script=$(mktemp)
-    if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.sh"; then
+    if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"; then
         chmod +x "$tmp_script"
         bash "$tmp_script" update
         rm -f "$tmp_script"
@@ -859,7 +859,7 @@ do_update() {
 do_uninstall() {
     echo -e "${CYAN}正在卸载 SBoard...${NC}"
     local tmp_script=$(mktemp)
-    if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.sh"; then
+    if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"; then
         chmod +x "$tmp_script"
         bash "$tmp_script" uninstall
         rm -f "$tmp_script"

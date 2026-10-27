@@ -845,7 +845,7 @@ function saveServerOrderDebounced() {
 }
 
 // GitHub 脚本地址 (使用加速域名，万能入口自动检测系统)
-const GITHUB_SCRIPT_URL = 'https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent-auto.sh'
+const GITHUB_SCRIPT_URL = 'https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent-auto.sh'
 
 // 计算 Agent 部署命令
 const agentDeployCommand = computed(() => {

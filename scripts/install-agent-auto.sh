@@ -5,10 +5,10 @@
 #
 # 用法:
 #   Linux/macOS:
-#     curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent-auto.sh | bash -s -- --token <token> --panel <panel_url>
+#     curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent-auto.sh | bash -s -- --token <token> --panel <panel_url>
 #
 #   Windows (PowerShell) - 直接使用:
-#     $env:TOKEN="your_token"; $env:PANEL="https://panel.example.com"; irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent.ps1 | iex
+#     $env:TOKEN="your_token"; $env:PANEL="https://panel.example.com"; irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent.ps1 | iex
 #
 # 参数:
 #   --token <token>   Agent 认证 Token (必填)
@@ -27,7 +27,7 @@ NC='\033[0m'
 
 # GitHub 加速
 GH_PROXY="https://ghfast.top/"
-REPO_URL="${GH_PROXY}https://raw.githubusercontent.com/amuae/sboard/main/scripts"
+REPO_URL="${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts"
 
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -49,10 +49,10 @@ show_help() {
     echo ""
     echo "示例:"
     echo "  # Linux/macOS"
-    echo "  curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent-auto.sh | bash -s -- --token abc123 --panel https://panel.example.com"
+    echo "  curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent-auto.sh | bash -s -- --token abc123 --panel https://panel.example.com"
     echo ""
     echo "  # Windows (PowerShell)"
-    echo '  $env:TOKEN="abc123"; $env:PANEL="https://panel.example.com"; irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent.ps1 | iex'
+    echo '  $env:TOKEN="abc123"; $env:PANEL="https://panel.example.com"; irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent.ps1 | iex'
     echo ""
 }
 
@@ -98,14 +98,14 @@ show_windows_help() {
     echo -e "  ${GREEN}方式1: 设置环境变量后安装${NC}"
     echo '  $env:TOKEN="your_token"'
     echo '  $env:PANEL="https://panel.example.com"'
-    echo '  irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent.ps1 | iex'
+    echo '  irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent.ps1 | iex'
     echo ""
     echo -e "  ${GREEN}方式2: 下载脚本后带参数运行${NC}"
-    echo '  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent.ps1" -OutFile "install-agent.ps1"'
+    echo '  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent.ps1" -OutFile "install-agent.ps1"'
     echo '  .\install-agent.ps1 -Token "your_token" -Panel "https://panel.example.com"'
     echo ""
     echo -e "  ${GREEN}使用加速下载:${NC}"
-    echo '  irm https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent.ps1 -OutFile install-agent.ps1'
+    echo '  irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent.ps1 -OutFile install-agent.ps1'
     echo ""
     exit 0
 }

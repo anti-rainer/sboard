@@ -26,24 +26,24 @@
 
 直接安装：
 ```bash
-curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
 ```
 
 国内加速：
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install.sh | bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell 管理员):**
 
 直接安装：
 ```powershell
-irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.ps1 | iex
+irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
 ```
 
 国内加速：
 ```powershell
-irm https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-sboard.ps1 | iex
+irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
 ```
 
 ### Agent 安装
@@ -56,24 +56,24 @@ Agent 安装命令由面板自动生成，包含节点 Token。请在面板中�
 
 直接卸载：
 ```bash
-curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent-auto.sh | bash
+curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent-auto.sh | bash
 ```
 
 国内加速：
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent-auto.sh | bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent-auto.sh | bash
 ```
 
 **Windows (PowerShell 管理员):**
 
 直接卸载：
 ```powershell
-irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent.ps1 | iex
+irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex
 ```
 
 国内加速：
 ```powershell
-irm https://ghfast.top/https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent.ps1 | iex
+irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex
 ```
 
 ## 服务管理

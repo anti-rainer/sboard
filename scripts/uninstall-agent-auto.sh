@@ -4,10 +4,10 @@
 # 自动检测操作系统并调用对应的卸载脚本
 #
 # Linux/macOS:
-#   curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent-auto.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent-auto.sh | bash
 #
 # Windows (PowerShell) - 直接使用:
-#   irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent.ps1 | iex
+#   irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex
 
 set -e
 
@@ -20,7 +20,7 @@ NC='\033[0m'
 
 # GitHub 加速
 GH_PROXY="https://ghfast.top/"
-REPO_URL="${GH_PROXY}https://raw.githubusercontent.com/amuae/sboard/main/scripts"
+REPO_URL="${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts"
 
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -65,11 +65,11 @@ run_windows_bash_uninstaller() {
     echo ""
     echo -e "${YELLOW}在 Windows 上推荐使用 PowerShell 卸载:${NC}"
     echo ""
-    echo -e "  ${GREEN}irm https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent.ps1 | iex${NC}"
+    echo -e "  ${GREEN}irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex${NC}"
     echo ""
     echo "或者使用加速:"
     echo ""
-    echo -e "  ${GREEN}irm ${GH_PROXY}https://raw.githubusercontent.com/amuae/sboard/main/scripts/uninstall-agent.ps1 | iex${NC}"
+    echo -e "  ${GREEN}irm ${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex${NC}"
     echo ""
     exit 0
 }

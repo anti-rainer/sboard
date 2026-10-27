@@ -10,7 +10,7 @@
 #   - init.d/SysVinit (老版本系统)
 #
 # 用法: curl -fsSL https://your-panel.com/install-agent.sh | bash -s -- --token <token>
-# 或者: curl -fsSL https://raw.githubusercontent.com/amuae/sboard/main/scripts/install-agent.sh | bash -s -- --token <token> --panel <panel_url>
+# 或者: curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-agent.sh | bash -s -- --token <token> --panel <panel_url>
 
 set -e
 
@@ -22,7 +22,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 配置
-GITHUB_REPO="amuae/sboard"
+GITHUB_REPO="anti-rainer/sboard"
 INSTALL_DIR="/opt/sboard/agent"
 SERVICE_NAME="sboard-agent"
 BINARY_NAME="sboard-agent"

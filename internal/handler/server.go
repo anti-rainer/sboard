@@ -180,7 +180,7 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/api/agent/ws", s.handleAgentWebSocket)
 
 	// Agent 二进制下载（无需认证）
-	// 安装脚本已移至 GitHub: https://github.com/amuae/sboard/blob/main/scripts/install-agent.sh
+	// 安装脚本已移至 GitHub: https://github.com/anti-rainer/sboard/blob/main/scripts/install-agent.sh
 	s.router.GET("/download/agent-linux-:arch", s.handleDownloadAgent)
 
 	// 静态文件服务（前端）

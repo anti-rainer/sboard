@@ -29,7 +29,7 @@ param(
 )
 
 # 配置
-$GITHUB_REPO = "amuae/sboard"
+$GITHUB_REPO = "anti-rainer/sboard"
 $INSTALL_DIR = "$env:LOCALAPPDATA\sboard\agent"
 $SERVICE_NAME = "sboard-agent"
 $BINARY_NAME = "sboard-agent.exe"
