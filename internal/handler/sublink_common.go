@@ -69,15 +69,38 @@ func buildSelfSubURL(scheme, host, userUUID, format, nodeTag string) string {
 	return u
 }
 
-// buildPathSubURL 构造路径式订阅地址，末段为文件名。
-// 客户端会拿末段当配置备注名显示（sboard.conf -> sboard）。
+// subPortalName 机场名，用于路径首段与订阅标题。
+const subPortalName = "sboard"
+
+// formatFileExt 按内部 format 给出文件名后缀。
+// 与各客户端习惯保持一致：mihomo/sing-box 用 yaml/json，其余用 txt/conf。
+func formatFileExt(format string) string {
+	switch format {
+	case "mihomo", "clash", "mihomo-provider":
+		return "yaml"
+	case "singbox", "sing-box", "singbox-provider", "sing-box-provider":
+		return "json"
+	case "loon", "shadowrocket", "sr":
+		return "conf"
+	default:
+		return "txt"
+	}
+}
+
+// buildPathSubURL 构造路径式订阅地址。
+//
+// 形如 /subscribe/sboard/<uuid>/<node>/<client>/sboard.conf
+//
+// 机场名 sboard 放在第一段：小火箭导入远程配置时会把 URL 里某一段当作
+// 配置备注名，之前 UUID 在最前，显示出来就是一串 UUID。首段放名字后，
+// 无论客户端取首段还是末段，拿到的都是 sboard。
 func buildPathSubURL(scheme, host, userUUID, nodeTag, client, file string) string {
 	node := nodeTag
 	if node == "" {
 		node = "-"
 	}
-	return fmt.Sprintf("%s://%s/subscribe/%s/%s/%s/%s",
-		scheme, host, userUUID, url.PathEscape(node), client, file)
+	return fmt.Sprintf("%s://%s/subscribe/%s/%s/%s/%s/%s",
+		scheme, host, subPortalName, userUUID, url.PathEscape(node), client, file)
 }
 
 // handleSubByUUID 处理短订阅链接 /sub/:uuid 或 /subscribe/:uuid
@@ -371,7 +394,8 @@ func (s *Server) handleSublink(c *gin.Context) {
 	case "loon":
 		// 分流模式：节点直接内嵌在 [Proxy] 段，配策略组与规则，
 		// 客户端导入即用，不需要再单独添加节点订阅。
-		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon", nodeTag)
+		// update-url 用路径式地址，末段 sboard.conf 会被客户端当配置备注名。
+		selfURL := buildPathSubURL(scheme, c.Request.Host, userUUID, nodeTag, "loon", "sboard.conf")
 		content, err = generateClientConfig2(formatLoon, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, "")
 		contentType = "text/plain; charset=utf-8"
 	case "loon-nodes":
@@ -407,8 +431,12 @@ func (s *Server) handleSublink(c *gin.Context) {
 	// 获取站点标题
 	siteTitle := GetSetting("site_title")
 	if siteTitle == "" {
-		siteTitle = "SBoard"
+		siteTitle = subPortalName
 	}
+
+	// 下载文件名：客户端（尤其 Shadowrocket）导入远程配置时用它当备注名。
+	// 不设置时客户端回退到 URL 路径，那里含 UUID，备注会显示成 UUID。
+	downloadName := subPortalName + "." + formatFileExt(format)
 
 	// 获取订阅域名作为网站 URL
 	subscribeDomain := GetSetting("subscribe_domain")
@@ -423,29 +451,35 @@ func (s *Server) handleSublink(c *gin.Context) {
 
 	// ===== 订阅信息响应头（机场标准）=====
 	//
-	// 各客户端靠这些头显示机场名、流量、到期时间：
-	//   profile-title            机场名称，base64: 前缀表示内容经过 base64
+	// 参照主流机场的实际做法：
+	//   profile-title            机场名，纯文本（不要 base64: 前缀）
+	//   content-disposition      attachment; filename="sboard.yaml|txt|conf"
+	//                            Shadowrocket 导入远程配置时用这个文件名当备注
 	//   subscription-userinfo    upload/download/total/expire（字节 / Unix 秒）
 	//   profile-update-interval  客户端自动更新间隔（小时）
 	//
 	// TrafficUsed / TrafficLimit 在库里以 GB 存储，头里要求字节。
-	// upload 用 0、download 用全部已用量：本系统只记录合计流量，
-	// 不区分上下行，把一个填 0 另一个填合计可让客户端正确显示总量。
 	const bytesPerGB = 1024 * 1024 * 1024
 	totalBytes := user.TrafficLimit * bytesPerGB
 	usedBytes := user.TrafficUsed * bytesPerGB
-	// total=0 表示不限流量，此时 download 仍填已用量以便客户端显示已用
 	c.Header("Subscription-Userinfo", fmt.Sprintf("upload=0; download=%d; total=%d; expire=%d",
 		usedBytes, totalBytes, expiryUnix))
 
-	// 机场名称：site_title 未设置时用 "sboard"
+	// 机场名称：site_title 未设置时用 sboard。
+	// 纯文本形式，不加密 —— base64: 前缀在新版客户端里会原样显示成乱码。
 	if siteTitle == "" {
-		siteTitle = "sboard"
+		siteTitle = subPortalName
 	}
-	c.Header("profile-title", "base64:"+base64.StdEncoding.EncodeToString([]byte(siteTitle)))
-	c.Header("Profile-Title", "base64:"+base64.StdEncoding.EncodeToString([]byte(siteTitle)))
-	c.Header("profile-update-interval", "24")
+	c.Header("Profile-Title", siteTitle)
+	c.Header("profile-title", siteTitle)
 	c.Header("Profile-Update-Interval", "24")
+	c.Header("profile-update-interval", "24")
+
+	// 配置文件名：客户端（尤其 Shadowrocket）用它作为导入后的备注名。
+	// 不设置的话客户端会回退到 URL 路径，那里含 UUID，备注就成了 UUID。
+	c.Header("Content-Disposition",
+		fmt.Sprintf("attachment; filename=%q; filename*=UTF-8''%s", downloadName, downloadName))
+
 	// profile-web-page-url: 网站地址
 	if profileWebPageURL != "" {
 		c.Header("profile-web-page-url", profileWebPageURL)

@@ -352,7 +352,9 @@ const clientFiles = [
 ]
 
 function copyClientFile(user: User, nodeTag: string, item: { client: string; file: string; label: string }) {
-  const url = `${window.location.origin}/subscribe/${user.uuid}/${encodeURIComponent(nodeTag)}/${item.client}/${item.file}`
+  // 首段 sboard 是机场名：小火箭导入远程配置时会把它当配置备注名显示，
+  // 若首段是 UUID，备注就会显示成一串 UUID。
+  const url = `${window.location.origin}/subscribe/sboard/${user.uuid}/${encodeURIComponent(nodeTag)}/${item.client}/${item.file}`
   copyToClipboard(url).then(() => {
     showToast('success', '成功', `已复制 ${item.label}`)
   }).catch(() => {
