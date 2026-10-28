@@ -34,9 +34,8 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 				nc = serverConfigs[node.ID]
 			}
 
-			// 生成直连节点（使用主 UUID）；多节点服务器用节点级命名保证唯一
-			nodeName := buildNodeName(&swn.Server, user, lv, &node, swn.MultiNode)
-			proxy := buildMihomoProxy(&swn.Server, &node, nc, user, lv, &ProxyCustomOptions{CustomName: nodeName})
+			// 生成直连节点（使用主 UUID）
+			proxy := buildMihomoProxy(&swn.Server, &node, nc, user, lv, nil)
 			if proxy != nil {
 				proxies = append(proxies, proxy)
 				proxyName := proxy.GetName()
@@ -60,7 +59,7 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 					continue
 				}
 				customOpts := &ProxyCustomOptions{
-					CustomName: nodeName + "-" + outbound.Remark,
+					CustomName: swn.Server.Name + "-" + outbound.Remark,
 					CustomUUID: extraUUID,
 				}
 				outboundProxy := buildMihomoProxy(&swn.Server, &node, nc, user, lv, customOpts)

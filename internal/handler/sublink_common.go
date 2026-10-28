@@ -48,10 +48,6 @@ type ServerWithNodes struct {
 	Server    database.Server
 	Nodes     []database.InboundNode
 	Outbounds []database.ServerOutbound // 落地出站列表
-	// MultiNode 表示该用户在此服务器上有多个节点（按 type 过滤前的总数判定）。
-	// 用于决定订阅里的节点名是否需要追加节点 tag 去重；按过滤后数量判定会让
-	// 同一节点在单节点链接与全量订阅里名字不一致。
-	MultiNode bool
 }
 
 // handleSubByUUID 处理短订阅链接 /sub/:uuid 或 /subscribe/:uuid
@@ -164,10 +160,6 @@ func (s *Server) handleSublink(c *gin.Context) {
 		database.GetDB().Where("id IN ? AND enabled = ?", nodeIDs, 1).Find(&userNodes)
 	}
 
-	// 多节点判定必须取 type 过滤前的数量：
-	// 否则同一节点在 /sublink?type=xxx 与全量订阅里的显示名会不一致。
-	multiNode := len(userNodes) > 1
-
 	// 按节点标签（tag）过滤节点
 	if nodeType != "" {
 		var filteredNodes []database.InboundNode
@@ -177,6 +169,18 @@ func (s *Server) handleSublink(c *gin.Context) {
 			}
 		}
 		userNodes = filteredNodes
+	} else {
+		// 当不带 type 参数时，只保留第一个入站节点（按 ID 排序，取最小的）
+		if len(userNodes) > 0 {
+			// 找到 ID 最小的节点
+			minNode := userNodes[0]
+			for _, node := range userNodes {
+				if node.ID < minNode.ID {
+					minNode = node
+				}
+			}
+			userNodes = []database.InboundNode{minNode}
+		}
 	}
 
 	// 获取外部节点（按用户等级过滤）
@@ -247,7 +251,6 @@ func (s *Server) handleSublink(c *gin.Context) {
 			Server:    server,
 			Nodes:     userNodes,
 			Outbounds: serverOutbounds[server.ID],
-			MultiNode: multiNode,
 		})
 	}
 
@@ -493,18 +496,6 @@ type ProxyBuildParams struct {
 }
 
 // initProxyBuildParams 初始化节点构建的公共参数
-// buildNodeName 生成订阅中节点的显示名。
-// 单节点服务器沿用原命名（服务器级 Node1/Node2/Node3 或服务器名），保持既有行为不变；
-// 同一服务器有多个节点时追加节点 tag —— 否则多个 proxy 会重名，客户端直接判配置非法。
-// 节点 tag 有唯一索引，可安全用作去重后缀。
-func buildNodeName(server *database.Server, user *database.ProxyUser, lv int, node *database.InboundNode, multiNode bool) string {
-	base := getNodeName(server, user.Level, lv)
-	if multiNode && strings.TrimSpace(node.Tag) != "" {
-		return base + "-" + node.Tag
-	}
-	return base
-}
-
 func initProxyBuildParams(server *database.Server, node *database.InboundNode, nc *database.ServerNodeConfig, user *database.ProxyUser, lv int, customOpts *ProxyCustomOptions) ProxyBuildParams {
 	name := getNodeName(server, user.Level, lv)
 	if customOpts != nil && customOpts.CustomName != "" {
