@@ -89,18 +89,17 @@ func formatFileExt(format string) string {
 
 // buildPathSubURL 构造路径式订阅地址。
 //
-// 形如 /subscribe/sboard/<uuid>/<node>/<client>/sboard.conf
+// 形如 /subscribe/<uuid>/<node>/<client>/<file>
 //
-// 机场名 sboard 放在第一段：小火箭导入远程配置时会把 URL 里某一段当作
-// 配置备注名，之前 UUID 在最前，显示出来就是一串 UUID。首段放名字后，
-// 无论客户端取首段还是末段，拿到的都是 sboard。
+// 链接格式保持原样。客户端备注名由响应头 Content-Disposition 的
+// filename 决定（见 handleSublink），不依赖 URL 里的段。
 func buildPathSubURL(scheme, host, userUUID, nodeTag, client, file string) string {
 	node := nodeTag
 	if node == "" {
 		node = "-"
 	}
-	return fmt.Sprintf("%s://%s/subscribe/%s/%s/%s/%s/%s",
-		scheme, host, subPortalName, userUUID, url.PathEscape(node), client, file)
+	return fmt.Sprintf("%s://%s/subscribe/%s/%s/%s/%s",
+		scheme, host, userUUID, url.PathEscape(node), client, file)
 }
 
 // handleSubByUUID 处理短订阅链接 /sub/:uuid 或 /subscribe/:uuid

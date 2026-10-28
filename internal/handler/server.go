@@ -177,15 +177,13 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/subscribe/:uuid", s.handleSubByUUID) // 兼容格式
 
 	// 路径式客户端配置与 provider 地址，形如
-	//   /subscribe/sboard/<uuid>/<node>/mihomo/sboard.yaml
-	//   /subscribe/sboard/<uuid>/<node>/sing-box/sboard.json
-	//   /subscribe/sboard/<uuid>/<node>/shadowrocket/sboard.conf
-	//   /subscribe/sboard/<uuid>/<node>/loon/sboard.conf
-	// 首段是机场名（小火箭会拿它当配置备注名），末段文件名只为客户端
-	// 识别后缀，服务端按 <client> 段决定输出。
-	// 机场名用字面量而非通配符：gin 同一位置不能混用不同名的通配符
-	// （/subscribe/:uuid 已存在），字面量节点与通配符可以共存。
-	s.router.GET("/subscribe/"+subPortalName+"/:uuid/:node/:client/:file", s.handleSubByPath)
+	// 路径式客户端配置与 provider 地址，形如
+	//   /subscribe/<uuid>/<node>/mihomo/sboard.yaml
+	//   /subscribe/<uuid>/<node>/sing-box/sboard.json
+	//   /subscribe/<uuid>/<node>/shadowrocket/sboard.conf
+	//   /subscribe/<uuid>/<node>/loon/sboard.conf
+	// 末段文件名只为客户端识别后缀，服务端按 <client> 段决定输出。
+	s.router.GET("/subscribe/:uuid/:node/:client/:file", s.handleSubByPath)
 
 	// Agent WebSocket 端点（使用 token 认证）
 	s.router.GET("/api/agent/ws", s.handleAgentWebSocket)
