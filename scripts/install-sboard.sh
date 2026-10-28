@@ -846,14 +846,21 @@ do_logs() {
 do_update() {
     echo -e "${CYAN}正在更新 SBoard...${NC}"
     local tmp_script=$(mktemp)
+    local rc=1
     if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"; then
         chmod +x "$tmp_script"
         bash "$tmp_script" update
+        rc=$?
         rm -f "$tmp_script"
     else
         echo -e "${RED}下载更新脚本失败${NC}"
         rm -f "$tmp_script"
     fi
+    # 子脚本会把本文件（/usr/local/bin/sboard）整体重写。bash 是按字节偏移
+    # 边读边执行的，文件被替换后继续读会读到错位内容并报
+    # "syntax error near unexpected token ';;'"。所以必须立即退出，
+    # 绝不能再从已被替换的文件里往下读。
+    exit "$rc"
 }
 
 do_uninstall() {
