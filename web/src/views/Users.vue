@@ -59,15 +59,38 @@
                     :style="openDropdownId === user.id ? { display: 'block' } : {}"
                   >
                     <template v-for="node in nodes" :key="node.id">
-                      <!-- 订阅链接 -->
-                      <li>
-                        <a 
-                          class="dropdown-item small" 
-                          href="#" 
-                          @click.prevent="copySubLink(user, node.tag, false)"
+                      <!-- 每个节点：展开成子菜单 -->
+                      <li class="dropdown-submenu">
+                        <a
+                          class="dropdown-item small d-flex justify-content-between align-items-center"
+                          href="#"
+                          @click.prevent.stop="toggleNodeMenu(user.id, node.tag)"
                         >
-                          <i class="bi bi-clipboard"></i> {{ node.tag }}
+                          <span><i class="bi bi-hdd-network"></i> {{ node.tag }}</span>
+                          <i class="bi bi-chevron-right small"></i>
                         </a>
+                        <ul
+                          class="dropdown-menu shadow"
+                          :class="{ show: openNodeMenu === user.id + '|' + node.tag }"
+                          :style="openNodeMenu === user.id + '|' + node.tag ? { display: 'block' } : {}"
+                        >
+                          <!-- 原始订阅：三格式自适应，带节点 -->
+                          <li>
+                            <a class="dropdown-item small" href="#"
+                               @click.prevent="copySubLink(user, node.tag)">
+                              <i class="bi bi-magic"></i> 原始订阅
+                              <span class="text-muted">（自适应）</span>
+                            </a>
+                          </li>
+                          <li><hr class="dropdown-divider"></li>
+                          <!-- 客户端配置与 provider -->
+                          <li v-for="item in clientFiles" :key="item.client">
+                            <a class="dropdown-item small" href="#"
+                               @click.prevent="copyClientFile(user, node.tag, item)">
+                              <i :class="item.icon"></i> {{ item.label }}
+                            </a>
+                          </li>
+                        </ul>
                       </li>
                     </template>
                   </ul>
@@ -215,6 +238,8 @@ const users = ref<User[]>([])
 const nodes = ref<Node[]>([])
 const loading = ref(false)
 const openDropdownId = ref<number | null>(null)
+// 展开中的节点子菜单，形如 "用户ID|节点tag"
+const openNodeMenu = ref<string | null>(null)
 
 // 模态框
 const userModalEl = ref<HTMLElement | null>(null)
@@ -248,6 +273,7 @@ const handleClickOutside = (e: MouseEvent) => {
     const target = e.target as HTMLElement
     if (!target.closest('.dropdown')) {
       openDropdownId.value = null
+      openNodeMenu.value = null
     }
   }
 }
@@ -289,7 +315,37 @@ function isExpired(user: User) {
 }
 
 function toggleDropdown(userId: number) {
-  openDropdownId.value = openDropdownId.value === userId ? null : userId
+  const next = openDropdownId.value === userId ? null : userId
+  openDropdownId.value = next
+  // 收起主菜单时同步收起子菜单
+  if (next === null) openNodeMenu.value = null
+}
+
+function toggleNodeMenu(userId: number, nodeTag: string) {
+  const key = userId + '|' + nodeTag
+  openNodeMenu.value = openNodeMenu.value === key ? null : key
+}
+
+// 路径式客户端配置。client 段由后端映射到具体格式：
+//   mihomo / sing-box -> provider 文件（只含节点）
+//   shadowrocket / loon -> 分流配置（策略组 + 规则）
+// 末段文件名只为客户端识别后缀，后端按 client 段决定输出。
+const clientFiles = [
+  { client: 'mihomo',      file: 'sboard.yaml', label: 'mihomo · provider',   icon: 'bi bi-filetype-yml' },
+  { client: 'sing-box',    file: 'sboard.json', label: 'sing-box · provider', icon: 'bi bi-filetype-json' },
+  { client: 'shadowrocket', file: 'sboard.conf', label: '小火箭 · 分流配置',    icon: 'bi bi-rocket' },
+  { client: 'loon',        file: 'sboard.conf', label: 'Loon · 分流配置',      icon: 'bi bi-phone' }
+]
+
+function copyClientFile(user: User, nodeTag: string, item: { client: string; file: string; label: string }) {
+  const url = `${window.location.origin}/subscribe/${user.uuid}/${encodeURIComponent(nodeTag)}/${item.client}/${item.file}`
+  copyToClipboard(url).then(() => {
+    showToast('success', '成功', `已复制 ${item.label}`)
+  }).catch(() => {
+    showToast('error', '错误', '复制失败')
+  })
+  openNodeMenu.value = null
+  openDropdownId.value = null
 }
 
 // 通用复制函数
@@ -315,15 +371,16 @@ function copyToClipboard(text: string): Promise<void> {
   })
 }
 
-function copySubLink(user: User, nodeTag: string, lv3Only: boolean) {
-  // 格式: /subscribe/{uuid}?node={nodeTag}
-  // node 参数是节点管理页里的入站节点名称（tag），不是协议类型
-  let url = `${window.location.origin}/subscribe/${user.uuid}?node=${encodeURIComponent(nodeTag)}`
+function copySubLink(user: User, nodeTag: string) {
+  // 原始订阅：UA 自适应，下发 mihomo / sing-box / v2ray 三种标准格式，
+  // 节点内嵌。适合绝大多数客户端直接导入。
+  const url = `${window.location.origin}/subscribe/${user.uuid}?node=${encodeURIComponent(nodeTag)}`
   copyToClipboard(url).then(() => {
-    showToast('success', '成功', `已复制订阅链接: ${nodeTag}`)
+    showToast('success', '成功', `已复制原始订阅: ${nodeTag}`)
   }).catch(() => {
     showToast('error', '错误', '复制失败')
   })
+  openNodeMenu.value = null
   openDropdownId.value = null
 }
 
@@ -474,5 +531,24 @@ async function doDelete() {
   margin: 0px;
   transform: translate(0px, 38px);
   z-index: 1050;
+}
+/* 节点子菜单：Bootstrap 原生不支持嵌套 dropdown，需手工定位 */
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu > .dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -0.25rem;
+  margin-left: 0.125rem;
+  min-width: 12rem;
+}
+/* 手机窄屏：子菜单改为在右侧展开不下时向左弹出 */
+@media (max-width: 576px) {
+  .dropdown-submenu > .dropdown-menu {
+    left: auto;
+    right: 100%;
+    margin-right: 0.125rem;
+  }
 }
 </style>
