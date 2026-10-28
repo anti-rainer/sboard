@@ -47,6 +47,10 @@ type OutboundRequest struct {
 	TuicCongestion   string `json:"tuic_congestion"`
 	TuicUdpRelayMode string `json:"tuic_udp_relay_mode"`
 
+	// Country 落地节点的实际出口国家（ISO 3166-1 alpha-2）。
+	// Host 是入口地址，与真实出口国家可能不同，需允许手工指定。
+	Country string `json:"country"`
+
 	// 传输层配置 (VMess/VLESS)
 	Network string `json:"network"`
 	WsPath  string `json:"ws_path"`
@@ -205,6 +209,7 @@ func (s *Server) handleCreateServerOutbound(c *gin.Context) {
 		ObfsPwd:          req.ObfsPwd,
 		TuicCongestion:   req.TuicCongestion,
 		TuicUdpRelayMode: req.TuicUdpRelayMode,
+		Country:          strings.ToUpper(strings.TrimSpace(req.Country)),
 		Network:          req.Network,
 		WsPath:   req.WsPath,
 		WsHost:   req.WsHost,
@@ -274,6 +279,7 @@ func (s *Server) handleUpdateServerOutbound(c *gin.Context) {
 	outbound.ObfsPwd = req.ObfsPwd
 	outbound.TuicCongestion = req.TuicCongestion
 	outbound.TuicUdpRelayMode = req.TuicUdpRelayMode
+	outbound.Country = strings.ToUpper(strings.TrimSpace(req.Country))
 	outbound.Network = req.Network
 	outbound.WsPath = req.WsPath
 	outbound.WsHost = req.WsHost

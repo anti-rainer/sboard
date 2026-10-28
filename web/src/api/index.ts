@@ -400,6 +400,8 @@ export interface ServerOutbound {
   // TUIC 配置（password 复用通用 password 字段）
   tuic_congestion: string
   tuic_udp_relay_mode: string
+  /** 落地节点真实出口国家（ISO 3166-1 alpha-2）。留空则按入口 IP 推断 */
+  country: string
   // 传输层配置
   network: string
   ws_path: string

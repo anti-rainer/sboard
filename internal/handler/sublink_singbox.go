@@ -73,11 +73,17 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 					if tag == "" {
 						continue
 					}
-					countryCode := getCountryCode(ob.Host)
+					// 落地出站的国家优先用运营者手工指定的值：
+					// ob.Host 是【入口】地址，与真实出口所在国家常常不同
+					// （如德国入口上的捷克 NAT 落地），按 IP 推断会分错组。
+					countryCode := strings.ToUpper(strings.TrimSpace(ob.Country))
+					if countryCode == "" {
+						countryCode = getCountryCode(ob.Host)
+					}
 					if countryCode != "" {
 						countryProxyTags[countryCode] = append(countryProxyTags[countryCode], tag)
 					}
-					if isDomesticByIP(ob.Host) {
+					if countryCode == "CN" || (countryCode == "" && isDomesticByIP(ob.Host)) {
 						domesticProxyTags = append(domesticProxyTags, tag)
 					} else {
 						overseasProxyTags = append(overseasProxyTags, tag)

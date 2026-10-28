@@ -615,6 +615,13 @@ type ServerOutbound struct {
 	WsPath  string `gorm:"size:200" json:"ws_path"` // WebSocket path
 	WsHost  string `gorm:"size:200" json:"ws_host"` // WebSocket host header
 
+	// Country 落地节点的实际出口国家（ISO 3166-1 alpha-2，如 CZ）。
+	// 落地出站的 Host 是【入口】地址，与真实出口位置常常不在同一国家
+	// （例如 shandun-de 上挂的捷克 NAT 落地，入口在德国、出口在捷克）。
+	// 靠 Host 的 IP 推断国家会把这些落地分到错误的分组，所以允许手工指定；
+	// 留空时才回退到 IP 推断。
+	Country string `gorm:"size:10" json:"country"`
+
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

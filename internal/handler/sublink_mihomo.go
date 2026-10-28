@@ -21,6 +21,10 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 	var proxies []MihomoProxy
 	var overseasProxies []string
 	var domesticProxies []string
+	// countryProxies 按国家代码归集节点名，供策略组的 geoip-country 过滤使用。
+	// 此前完全没有这份数据，导致 HK-VoWiFi / UK-VoWiFi / CZ-VoWiFi 这类
+	// 按地区过滤的策略组永远筛不到节点，全部退化成「所有海外节点」。
+	countryProxies := make(map[string][]string)
 
 	for _, swn := range servers {
 		for _, node := range swn.Nodes {
@@ -44,8 +48,12 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 				nodeIP := getNodeEffectiveIP(&swn.Server, &node, nc)
 				if isDomesticByIP(nodeIP) {
 					domesticProxies = append(domesticProxies, proxyName)
+					countryProxies["CN"] = append(countryProxies["CN"], proxyName)
 				} else {
 					overseasProxies = append(overseasProxies, proxyName)
+					if cc := getCountryCode(nodeIP); cc != "" {
+						countryProxies[cc] = append(countryProxies[cc], proxyName)
+					}
 				}
 			}
 
@@ -66,11 +74,20 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 				if outboundProxy != nil {
 					proxies = append(proxies, outboundProxy)
 					proxyName := outboundProxy.GetName()
-					// 根据落地出站的 Host 判断国家分组
-					if isDomesticByIP(outbound.Host) {
+					// 落地出站的 Host 是【入口】地址，真实出口所在国家可能不同
+					// （如德国入口上挂的捷克 NAT 落地）。优先用运营者指定的 Country，
+					// 留空时才回退到按 IP 推断。
+					cc := strings.ToUpper(strings.TrimSpace(outbound.Country))
+					if cc == "" {
+						cc = getCountryCode(outbound.Host)
+					}
+					if cc == "CN" {
 						domesticProxies = append(domesticProxies, proxyName)
 					} else {
 						overseasProxies = append(overseasProxies, proxyName)
+					}
+					if cc != "" {
+						countryProxies[cc] = append(countryProxies[cc], proxyName)
 					}
 				}
 			}
@@ -84,11 +101,14 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 			proxies = append(proxies, proxy)
 			proxyName := proxy.GetName()
 			overseasProxies = append(overseasProxies, proxyName)
+			if cc := strings.ToUpper(strings.TrimSpace(ext.Country)); cc != "" {
+				countryProxies[cc] = append(countryProxies[cc], proxyName)
+			}
 		}
 	}
 
 	// 构建策略组 - 从配置读取或使用默认
-	proxyGroups := buildMihomoProxyGroups(mihomoConfig, overseasProxies, domesticProxies)
+	proxyGroups := buildMihomoProxyGroups(mihomoConfig, overseasProxies, domesticProxies, countryProxies)
 
 	// 构建基础配置
 	baseConfig := buildMihomoBaseConfig(mihomoConfig)
@@ -441,7 +461,7 @@ func buildMihomoProxyFromExternal(ext *database.ExternalNode) MihomoProxy {
 }
 
 // buildMihomoProxyGroups 根据配置构建策略组
-func buildMihomoProxyGroups(cfg *MihomoSubscriptionConfig, overseasProxies, domesticProxies []string) []map[string]interface{} {
+func buildMihomoProxyGroups(cfg *MihomoSubscriptionConfig, overseasProxies, domesticProxies []string, countryProxies map[string][]string) []map[string]interface{} {
 	var groups []map[string]interface{}
 
 	if cfg != nil && len(cfg.Config.ProxyGroups) > 0 {
@@ -460,6 +480,21 @@ func buildMihomoProxyGroups(cfg *MihomoSubscriptionConfig, overseasProxies, dome
 					selectedProxies = domesticProxies
 				} else {
 					selectedProxies = overseasProxies
+				}
+			case "geoip-country":
+				// 按国家代码筛节点，如 filter="HK" 或 "US,GB,DE"
+				for _, c := range strings.Split(pg.Filter, ",") {
+					c = strings.ToUpper(strings.TrimSpace(c))
+					if c == "" {
+						continue
+					}
+					// UK 是常见别名，GeoIP 返回的是 GB
+					if c == "UK" {
+						c = "GB"
+					}
+					if names, ok := countryProxies[c]; ok {
+						selectedProxies = append(selectedProxies, names...)
+					}
 				}
 			case "regex":
 				// 正则过滤
@@ -503,7 +538,10 @@ func buildMihomoProxyGroups(cfg *MihomoSubscriptionConfig, overseasProxies, dome
 				}
 			}
 
-			if len(selectedProxies) == 0 {
+			// 按国家筛不出节点时不要回退到「全部海外节点」：
+			// 那会让 HK/UK/CZ 这类地区组变成所有节点的副本，分流形同虚设。
+			// 地区组筛空就让它空着（下面兜底为 DIRECT）。
+			if len(selectedProxies) == 0 && pg.FilterMode != "geoip-country" {
 				selectedProxies = overseasProxies
 			}
 			if len(selectedProxies) == 0 {

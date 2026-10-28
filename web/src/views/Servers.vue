@@ -510,6 +510,14 @@
                   <label class="form-label">端口</label>
                   <input type="number" class="form-control" v-model.number="outboundData.port" min="1" max="65535">
                 </div>
+                <div class="col-2 mb-3">
+                  <label class="form-label">
+                    出口国家
+                    <i class="bi bi-question-circle text-muted" title="落地节点真实所在国家（两位代码，如 CZ）。出站地址是入口，实际出口可能在别国，留空则按入口 IP 推断。"></i>
+                  </label>
+                  <input type="text" class="form-control" v-model="outboundData.country"
+                         placeholder="CZ" maxlength="2" style="text-transform: uppercase">
+                </div>
               </div>
 
               <!-- 协议分支：胶囊选择 -->
@@ -966,6 +974,8 @@ const outboundData = ref<OutboundForm>(getDefaultOutboundData())
 type OutboundForm = Partial<ServerOutbound> & {
   tuic_congestion?: string
   tuic_udp_relay_mode?: string
+  /** 落地节点真实出口国家（两位代码）。出站地址是入口，实际出口可能在别国 */
+  country?: string
 }
 
 /** 兼容历史别名：ss→shadowsocks、socks5→socks（与后端归一化保持一致） */
@@ -983,6 +993,7 @@ function getDefaultOutboundData(): OutboundForm {
     protocol: 'shadowsocks',
     host: '',
     port: 443,
+    country: '',
     password: '',
     method: '2022-blake3-aes-128-gcm',
     username: '',
