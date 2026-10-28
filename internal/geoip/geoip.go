@@ -50,10 +50,12 @@ func Init(path string) error {
 	if err := loadDB(); err != nil {
 		log.Printf("GeoIP 数据库不存在或已损坏，正在下载...")
 		if err := Download(); err != nil {
-			return fmt.Errorf("下载 GeoIP 数据库失败: %v", err)
-		}
-		if err := loadDB(); err != nil {
-			return err
+			// GeoIP 只用于按国家/地区划分节点分组，属于可选增强能力。
+			// 下载失败（离线部署、镜像不可达、网络抖动）不应该让整个面板起不来：
+			// 此前这里直接 return err，导致没有 mmdb 的环境完全无法启动。
+			log.Printf("下载 GeoIP 数据库失败（将不带 GeoIP 运行，分组可能按未知地区处理）: %v", err)
+		} else if err := loadDB(); err != nil {
+			log.Printf("加载下载后的 GeoIP 数据库失败（将不带 GeoIP 运行）: %v", err)
 		}
 	}
 

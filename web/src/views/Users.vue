@@ -316,8 +316,9 @@ function copyToClipboard(text: string): Promise<void> {
 }
 
 function copySubLink(user: User, nodeTag: string, lv3Only: boolean) {
-  // 格式: /subscribe/{uuid}?type={nodeTag}
-  let url = `${window.location.origin}/subscribe/${user.uuid}?type=${nodeTag}`
+  // 格式: /subscribe/{uuid}?node={nodeTag}
+  // node 参数是节点管理页里的入站节点名称（tag），不是协议类型
+  let url = `${window.location.origin}/subscribe/${user.uuid}?node=${encodeURIComponent(nodeTag)}`
   copyToClipboard(url).then(() => {
     showToast('success', '成功', `已复制订阅链接: ${nodeTag}`)
   }).catch(() => {

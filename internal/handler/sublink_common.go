@@ -70,7 +70,7 @@ func (s *Server) handleSubByUUID(c *gin.Context) {
 }
 
 // handleSublinkPHP 处理旧的 PHP 订阅链接格式
-// 兼容: /sublink.php?user=xxx&type=xxx
+// 兼容: /sublink.php?user=xxx&node=xxx（旧参数名为 type，仍兼容）
 func (s *Server) handleSublinkPHP(c *gin.Context) {
 	// 旧格式使用 "user" 参数，新格式使用 "uuid"
 	userUUID := c.Query("user")
@@ -112,7 +112,14 @@ func (s *Server) handleSublink(c *gin.Context) {
 	}
 
 	serverIDStr := c.Query("server")
-	nodeType := c.Query("type") // 节点类型过滤 (协议类型)
+	// node 参数用于按【节点管理页中的入站节点名称】过滤（即 inbound_nodes.tag），
+	// 例如 node=vless 会匹配 tag 为 "vless" 的那个入站节点。
+	// 注意：这不是协议类型，而是节点的名称/tag。
+	// 旧参数名 type 仍保留兼容，避免已分发的订阅链接立即失效。
+	nodeTag := c.Query("node")
+	if nodeTag == "" {
+		nodeTag = c.Query("type")
+	}
 
 	// 用户等级参数
 	lvStr := c.Query("lv")
@@ -160,11 +167,11 @@ func (s *Server) handleSublink(c *gin.Context) {
 		database.GetDB().Where("id IN ? AND enabled = ?", nodeIDs, 1).Find(&userNodes)
 	}
 
-	// 按节点标签（tag）过滤节点
-	if nodeType != "" {
+	// 按节点名称（tag）过滤节点
+	if nodeTag != "" {
 		var filteredNodes []database.InboundNode
 		for _, node := range userNodes {
-			if node.Tag == nodeType {
+			if node.Tag == nodeTag {
 				filteredNodes = append(filteredNodes, node)
 			}
 		}
