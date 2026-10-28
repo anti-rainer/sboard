@@ -39,14 +39,6 @@ import (
 //
 // 原 format=loon / shadowrocket 保持「内嵌节点」行为不变。
 
-// clientConfigMode 节点处理方式。
-type clientConfigMode int
-
-const (
-	modeEmbedded  clientConfigMode = iota // 节点写在配置里
-	modeSeparated                         // 节点由订阅动态提供
-)
-
 // generateClientConfig2 生成客户端配置。
 //
 //	selfURL    配置自身地址，写入 update-url
@@ -196,9 +188,15 @@ func buildLoonRemoteFilters(cfg *MihomoSubscriptionConfig, remoteAlias string, a
 			continue
 		}
 		seen[name] = true
+		// geoip-cn 的国内组：筛选条目改名为 <name>-Nodes，把 <name> 让给
+		// 带 DIRECT 的 select 组（规则里引用的是 <name>）。
+		filterName := name
+		if pg.FilterMode == "geoip-cn" && strings.TrimSpace(pg.Filter) == "cn" {
+			filterName = name + "-Nodes"
+		}
 		out = append(out, loonFilter{
-			name: name,
-			line: fmt.Sprintf("%s = NameRegex, %s, FilterKey = %s", name, remoteAlias, groupNameRegex(pg, members)),
+			name: filterName,
+			line: fmt.Sprintf("%s = NameRegex, %s, FilterKey = %s", filterName, remoteAlias, groupNameRegex(pg, members)),
 		})
 	}
 	return out
@@ -288,7 +286,7 @@ func countryKeywords(code string) []string {
 //
 // 成员直接用 [Remote Proxy] 别名和 [Remote Filter] 名——两者都能当策略引用。
 func buildLoonGroupsSeparated(cfg *MihomoSubscriptionConfig, remoteAlias string, filterNames []string) []string {
-	// 主组：全部节点 + 各筛选组
+	// 主组：自动测速、直连、节点订阅、各筛选组
 	members := []string{"Auto", "DIRECT", remoteAlias}
 	members = append(members, filterNames...)
 
@@ -297,11 +295,27 @@ func buildLoonGroupsSeparated(cfg *MihomoSubscriptionConfig, remoteAlias string,
 		"Auto = url-test, " + remoteAlias + ", url=" + clientTestURL + ", interval=600, tolerance=50",
 	}
 
-	// 每个筛选组再给一个同名 select 组，便于手动指定和测速
-	for _, name := range filterNames {
-		out = append(out,
-			fmt.Sprintf("%s-Auto = url-test, %s, url=%s, interval=600, tolerance=50", name, name, clientTestURL))
+	// 国内组必须能选 DIRECT（mihomo 里该组成员是 [DIRECT, 国内节点]）。
+	// [Remote Filter] 只能筛选节点、无法混入 DIRECT，所以国内组单独声明为
+	// 显式 select 组：DIRECT + 对应筛选条目。策略名与规则引用保持一致——
+	// 规则里写的是「国内」，这里用「国内-Direct」会引用不到，故沿用原名并
+	// 通过重命名筛选条目的方式腾出「国内」这个名字。
+	if cfg != nil {
+		for _, pg := range cfg.Config.ProxyGroups {
+			if pg.FilterMode != "geoip-cn" || strings.TrimSpace(pg.Filter) != "cn" {
+				continue
+			}
+			name := sanitizeClientName(pg.Name)
+			if name == "" {
+				continue
+			}
+			out = append(out, fmt.Sprintf("%s = select, DIRECT, %s-Nodes", name, name))
+		}
 	}
+
+	// 国内筛选组必须能选 DIRECT：与 mihomo 一致，否则国内流量还得走代理。
+	// [Remote Filter] 已经声明了同名条目，[Rule] 直接引用它即可；
+	// 这里不再额外造 -Auto 组，避免策略名重复和混淆。
 	return out
 }
 
@@ -322,7 +336,16 @@ func buildShadowrocketGroupsSeparated(cfg *MihomoSubscriptionConfig) []string {
 		if name == "" || name == "PROXY" || name == "Auto" {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%s = select, policy-regex-filter=%s", name, groupNameRegex(pg, nil)))
+		pattern := groupNameRegex(pg, nil)
+
+		// 国内组要能选 DIRECT：mihomo 里该组成员是 [DIRECT, 国内节点]。
+		// Shadowrocket 用 policy-regex-filter 时无法混入 DIRECT，
+		// 所以给国内组单独写成显式的 select 组并带上 DIRECT。
+		if pg.FilterMode == "geoip-cn" && strings.TrimSpace(pg.Filter) == "cn" {
+			out = append(out, fmt.Sprintf("%s = select, DIRECT", name))
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s = select, policy-regex-filter=%s", name, pattern))
 	}
 	return out
 }
