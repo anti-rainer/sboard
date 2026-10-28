@@ -531,6 +531,10 @@ export interface ExternalNode {
   updated_at: string
 }
 
+// 系统设置（含 Agent 自我更新源）
+export const getSettings = () => api.get<ApiResponse<Record<string, string>>>('/settings')
+export const saveSettings = (data: Record<string, string>) => api.post('/settings', data)
+
 export const getExternalNodes = () => api.get<ApiResponse<ExternalNode[]>>('/external-nodes')
 export const createExternalNode = (data: Partial<ExternalNode>) => api.post<ApiResponse<ExternalNode>>('/external-nodes', data)
 export const updateExternalNode = (id: number, data: Partial<ExternalNode>) => api.put<ApiResponse<ExternalNode>>(`/external-nodes/${id}`, data)

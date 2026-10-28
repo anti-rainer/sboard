@@ -105,6 +105,13 @@
                   @click="accountTab = 'oauth'; loadOAuthSettings()"
                 >OAuth 设置</button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button 
+                  class="nav-link" 
+                  :class="{ active: accountTab === 'agentUpdate' }"
+                  @click="accountTab = 'agentUpdate'; loadAgentUpdateSettings()"
+                >Agent 更新</button>
+              </li>
             </ul>
             
             <!-- 修改用户名 -->
@@ -241,6 +248,44 @@
                 </div>
               </div>
             </div>
+            <!-- Agent 更新 -->
+            <div v-if="accountTab === 'agentUpdate'">
+              <div v-if="agentUpdateLoading" class="text-center py-4">
+                <div class="spinner-border" role="status"></div>
+              </div>
+              <div v-else>
+                <div class="alert alert-info py-2 mb-3">
+                  <small>
+                    <i class="bi bi-info-circle"></i>
+                    这些值在下发「更新 Agent」指令时一并传给 Agent，改完即时生效，
+                    不需要重新编译或逐台替换 Agent 二进制。
+                  </small>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">仓库地址</label>
+                  <input type="text" class="form-control" v-model="agentUpdateSettings.repo"
+                         placeholder="anti-rainer/sboard">
+                  <div class="form-text">格式 owner/name，Agent 从这里下载新版本。</div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">首选加速前缀</label>
+                  <input type="text" class="form-control" v-model="agentUpdateSettings.proxy"
+                         placeholder="https://ghfast.top/">
+                  <div class="form-text">下载 GitHub 资源的前缀，留空表示直连。</div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">回退加速前缀</label>
+                  <input type="text" class="form-control" v-model="agentUpdateSettings.fallbacks"
+                         placeholder="https://v6.gh-proxy.org/">
+                  <div class="form-text">
+                    逗号分隔。首选源不可用时依次尝试，最后总会尝试直连 GitHub。
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -258,7 +303,7 @@
 import { ref, computed, watch, onMounted, nextTick, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Modal, Toast } from 'bootstrap'
-import { logout as apiLogout, changeUsername, changePassword, getOAuthProvidersAdmin, saveOAuthProvider, saveOAuthSettings, getGitHubLoginUrl } from './api'
+import { logout as apiLogout, changeUsername, changePassword, getOAuthProvidersAdmin, saveOAuthProvider, saveOAuthSettings, getGitHubLoginUrl, getSettings, saveSettings } from './api'
 
 const router = useRouter()
 const route = useRoute()
@@ -322,7 +367,7 @@ provide('showToast', showToast)
 // 账户设置模态框
 const accountModalEl = ref<HTMLElement | null>(null)
 const showAccountModal = ref(false)
-const accountTab = ref<'username' | 'password' | 'oauth'>('username')
+const accountTab = ref<'username' | 'password' | 'oauth' | 'agentUpdate'>('username')
 const newUsername = ref('')
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -381,6 +426,27 @@ watch(showAccountModal, (val) => {
   }
 })
 
+// ============ Agent 更新设置 ============
+const agentUpdateLoading = ref(false)
+const agentUpdateSettings = ref({ repo: '', proxy: '', fallbacks: '' })
+
+const loadAgentUpdateSettings = async () => {
+  agentUpdateLoading.value = true
+  try {
+    const res = await getSettings()
+    const d = res.data.data || {}
+    agentUpdateSettings.value = {
+      repo: d.update_repo ?? '',
+      proxy: d.update_proxy ?? '',
+      fallbacks: d.update_fallbacks ?? ''
+    }
+  } catch (e: any) {
+    showToast('error', '错误', e.response?.data?.error || '读取设置失败')
+  } finally {
+    agentUpdateLoading.value = false
+  }
+}
+
 const resetAccountForm = () => {
   newUsername.value = ''
   currentPassword.value = ''
@@ -438,6 +504,13 @@ const saveAccountSettings = async () => {
         allowed_users: githubOAuth.value.allowed_users
       })
       showToast('success', '成功', 'OAuth 设置已保存')
+    } else if (accountTab.value === 'agentUpdate') {
+      await saveSettings({
+        update_repo: agentUpdateSettings.value.repo.trim(),
+        update_proxy: agentUpdateSettings.value.proxy.trim(),
+        update_fallbacks: agentUpdateSettings.value.fallbacks.trim()
+      })
+      showToast('success', '成功', 'Agent 更新设置已保存')
     }
     if (accountModal) {
       accountModal.hide()
