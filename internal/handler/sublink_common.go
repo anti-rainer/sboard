@@ -366,24 +366,13 @@ func (p MihomoProxy) MarshalYAML() (interface{}, error) {
 			Kind:  yaml.ScalarNode,
 			Value: field.Key,
 		}
-		var valueNode *yaml.Node
-		switch v := field.Value.(type) {
-		case string:
-			valueNode = &yaml.Node{Kind: yaml.ScalarNode, Value: v}
-		case int:
-			valueNode = &yaml.Node{Kind: yaml.ScalarNode, Value: fmt.Sprintf("%d", v), Tag: "!!int"}
-		case bool:
-			valueNode = &yaml.Node{Kind: yaml.ScalarNode, Value: fmt.Sprintf("%t", v), Tag: "!!bool"}
-		case map[string]interface{}:
-			valueNode = &yaml.Node{Kind: yaml.MappingNode}
-			for k, val := range v {
-				valueNode.Content = append(valueNode.Content,
-					&yaml.Node{Kind: yaml.ScalarNode, Value: k},
-					&yaml.Node{Kind: yaml.ScalarNode, Value: fmt.Sprintf("%v", val)},
-				)
-			}
-		default:
-			valueNode = &yaml.Node{Kind: yaml.ScalarNode, Value: fmt.Sprintf("%v", v)}
+		// 统一走 valueToYamlNode，避免这里再维护一份类型分派。
+		// 此前这里缺 []string 分支，落进 default 用 fmt.Sprintf("%v") 把
+		// []string{"h3"} 序列化成了字符串 "[h3]"，导致 mihomo 报
+		// 'alpn' is not a slice 并拒绝整份配置。
+		valueNode, err := valueToYamlNode(field.Value)
+		if err != nil {
+			return nil, err
 		}
 		node.Content = append(node.Content, keyNode, valueNode)
 	}

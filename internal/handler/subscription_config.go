@@ -366,7 +366,8 @@ type MihomoConfigTemplate struct {
 	UnifiedDelay            bool   `json:"unifiedDelay"`
 	TcpConcurrent           bool   `json:"tcpConcurrent"`
 	FindProcessMode         string `json:"findProcessMode"`
-	GlobalClientFingerprint string `json:"globalClientFingerprint"`
+	// GlobalClientFingerprint 已废弃：mihomo 1.19+ 移除该配置项，
+	// 改为在每个 proxy 上单独设置 client-fingerprint。
 	ExternalController      string `json:"externalController"`
 	ExternalUi              string `json:"externalUi"`
 	ExternalUiUrl           string `json:"externalUiUrl"`

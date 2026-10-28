@@ -192,18 +192,6 @@
                           <option value="off">off</option>
                         </select>
                       </div>
-                      <div class="col-md-3">
-                        <label class="form-label">global-client-fingerprint</label>
-                        <select class="form-select" v-model="editingMihomo.config.globalClientFingerprint">
-                          <option value="chrome">chrome</option>
-                          <option value="firefox">firefox</option>
-                          <option value="safari">safari</option>
-                          <option value="iOS">iOS</option>
-                          <option value="android">android</option>
-                          <option value="edge">edge</option>
-                          <option value="random">random</option>
-                        </select>
-                      </div>
                     </div>
                     
                     <div class="row g-3 mb-4">
@@ -1652,7 +1640,6 @@ interface MihomoConfig {
     externalUi: string
     externalUiUrl: string
     findProcessMode: string
-    globalClientFingerprint: string
     profile: {
       storeSelected: boolean
       storeFakeip: boolean
@@ -1869,7 +1856,6 @@ const getDefaultMihomoConfig = (): MihomoConfig => ({
     externalUi: './dashboard',
     externalUiUrl: '',
     findProcessMode: 'always',
-    globalClientFingerprint: 'random',
     profile: {
       storeSelected: true,
       storeFakeip: true

@@ -101,7 +101,7 @@ func generateMihomoSubscription(servers []ServerWithNodes, nodeConfigs map[uint]
 	baseKeys := []string{
 		"mixed-port", "redir-port", "tproxy-port", "mode", "bind-address",
 		"ipv6", "allow-lan", "unified-delay", "tcp-concurrent",
-		"log-level", "find-process-mode", "global-client-fingerprint",
+		"log-level", "find-process-mode",
 		"external-controller", "external-ui",
 		"profile", "sniffer", "tun", "dns",
 	}
@@ -507,6 +507,12 @@ func buildMihomoProxyGroups(cfg *MihomoSubscriptionConfig, overseasProxies, dome
 			if len(selectedProxies) == 0 {
 				selectedProxies = overseasProxies
 			}
+			if len(selectedProxies) == 0 {
+				// mihomo 拒绝 proxies 为空的策略组，报错 "`use` or `proxies` missing"
+				// 并让整份配置加载失败。当用户一个可用节点都没有时（例如只有
+				// mihomo 无法表示的 naive 节点），兜底为 DIRECT 保证配置仍可用。
+				selectedProxies = []string{"DIRECT"}
+			}
 			group["proxies"] = selectedProxies
 
 			// 添加其他参数 (url-test, fallback 等类型需要)
@@ -564,7 +570,6 @@ func buildMihomoBaseConfig(cfg *MihomoSubscriptionConfig) map[string]interface{}
 	config["tcp-concurrent"] = c.TcpConcurrent
 	config["log-level"] = c.LogLevel
 	config["find-process-mode"] = c.FindProcessMode
-	config["global-client-fingerprint"] = c.GlobalClientFingerprint
 	config["external-controller"] = c.ExternalController
 	config["external-ui"] = c.ExternalUi
 
