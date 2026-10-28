@@ -115,11 +115,11 @@ func (s *Server) handleSublink(c *gin.Context) {
 	// node 参数用于按【节点管理页中的入站节点名称】过滤（即 inbound_nodes.tag），
 	// 例如 node=vless 会匹配 tag 为 "vless" 的那个入站节点。
 	// 注意：这不是协议类型，而是节点的名称/tag。
-	// 旧参数名 type 仍保留兼容，避免已分发的订阅链接立即失效。
+	//
+	// 旧参数名 type 已废弃，这里不再读取也不再提示——按冷处理兼容：
+	// 带了 type 的旧链接会被忽略该参数，效果等同于不带参数（只返回第一个节点），
+	// 不做任何兼容映射，也不返回错误，避免旧客户端直接报错。
 	nodeTag := c.Query("node")
-	if nodeTag == "" {
-		nodeTag = c.Query("type")
-	}
 
 	// 用户等级参数
 	lvStr := c.Query("lv")
