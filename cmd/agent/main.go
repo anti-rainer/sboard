@@ -15,6 +15,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -214,7 +215,24 @@ func (a *Agent) isDevDomain() bool {
 	return domainHash == devDomainHash
 }
 
+// 连接保活参数。
+// 面板每 agentPanelPingEvery 发一次 ping，agent 收到 ping 会回 pong 并刷新读超时；
+// 读超时内没有任何入站数据即判定连接已死，主动断开重连。
+// 没有这套机制时，面板被 kill 或 NAT 静默断链会让 agent 永久阻塞在 ReadJSON。
+const (
+	agentReadTimeout  = 30 * time.Second
+	agentWriteTimeout = 10 * time.Second
+	agentReadLimit    = 8 << 20
+)
+
+// reconnect 退避参数
+const (
+	reconnectBaseDelay = 5 * time.Second
+	reconnectMaxDelay  = 2 * time.Minute
+)
+
 func (a *Agent) run() {
+	delay := reconnectBaseDelay
 	for {
 		select {
 		case <-a.stopChan:
@@ -223,8 +241,11 @@ func (a *Agent) run() {
 		}
 
 		if err := a.connect(); err != nil {
-			log.Printf("连接失败: %v, 5秒后重试...", err)
-			time.Sleep(5 * time.Second)
+			log.Printf("连接失败: %v, %v 后重试...", err, delay)
+			if a.sleepOrStop(delay) {
+				return
+			}
+			delay = nextReconnectDelay(delay)
 			continue
 		}
 
@@ -232,11 +253,15 @@ func (a *Agent) run() {
 		if err := a.register(); err != nil {
 			log.Printf("注册失败: %v", err)
 			a.disconnect()
-			time.Sleep(5 * time.Second)
-			continue
+			if a.sleepOrStop(delay) {
+				return
+			}
+			delay = nextReconnectDelay(delay)
 		}
 
 		log.Println("已连接到面板")
+		// 连接成功后重置退避
+		delay = reconnectBaseDelay
 
 		// 启动心跳
 		go a.heartbeatLoop()
@@ -244,9 +269,33 @@ func (a *Agent) run() {
 		// 处理消息
 		a.messageLoop()
 
-		log.Println("连接断开，5秒后重连...")
-		time.Sleep(5 * time.Second)
+		log.Printf("连接断开，%v 后重连...", delay)
+		if a.sleepOrStop(delay) {
+			return
+		}
+		delay = nextReconnectDelay(delay)
 	}
+}
+
+// sleepOrStop 等待指定时长；期间收到停止信号则返回 true。
+func (a *Agent) sleepOrStop(d time.Duration) bool {
+	select {
+	case <-a.stopChan:
+		return true
+	case <-time.After(d):
+		return false
+	}
+}
+
+// nextReconnectDelay 指数退避并加抖动，避免面板重启时大量 agent 同时重连。
+func nextReconnectDelay(cur time.Duration) time.Duration {
+	next := cur * 2
+	if next > reconnectMaxDelay {
+		next = reconnectMaxDelay
+	}
+	// ±20% 抖动
+	jitter := time.Duration(rand.Int63n(int64(next)/5)) - next/10
+	return next + jitter
 }
 
 func (a *Agent) connect() error {
@@ -266,17 +315,42 @@ func (a *Agent) connect() error {
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
+		// 心跳是高频小消息，开启压缩可显著减少上报带宽
+		EnableCompression: true,
 	}
 	conn, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		return err
 	}
 
+	conn.SetReadLimit(agentReadLimit)
+	_ = conn.SetReadDeadline(time.Now().Add(agentReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(agentReadTimeout))
+	})
+	// 面板发的 ping 由默认 ping handler 自动回 pong；这里额外刷新读超时
+	conn.SetPingHandler(func(data string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(agentReadTimeout))
+		a.writeControl(websocket.PongMessage, []byte(data))
+		return nil
+	})
+
 	a.connMu.Lock()
 	a.conn = conn
 	a.connMu.Unlock()
 
 	return nil
+}
+
+// writeControl 在写锁内发送控制帧。
+func (a *Agent) writeControl(messageType int, data []byte) error {
+	a.connMu.Lock()
+	defer a.connMu.Unlock()
+	if a.conn == nil {
+		return nil
+	}
+	_ = a.conn.SetWriteDeadline(time.Now().Add(agentWriteTimeout))
+	return a.conn.WriteControl(messageType, data, time.Now().Add(agentWriteTimeout))
 }
 
 func (a *Agent) disconnect() {
@@ -414,6 +488,8 @@ func (a *Agent) messageLoop() {
 			log.Printf("读取消息失败: %v", err)
 			return
 		}
+		// 收到任何消息都说明链路存活
+		_ = a.conn.SetReadDeadline(time.Now().Add(agentReadTimeout))
 
 		go a.handleMessage(&msg)
 	}

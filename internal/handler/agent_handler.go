@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,6 +33,12 @@ var upgrader = websocket.Upgrader{
 }
 
 // AgentConnection Agent 连接
+// agentAliveWindow 判定 Agent 在线的时间窗。
+// 心跳 2 秒一次，取 15 秒可容错 7 次丢失。判据用「距最后一次心跳的时长」，
+// 而不是「12 秒内攒够 4 次心跳」——后者会让刚连上的 agent 在前 8 秒被判离线，
+// 把启动毛刺和真正掉线混为一谈。
+const agentAliveWindow = 15 * time.Second
+
 type AgentConnection struct {
 	ID            string
 	Conn          *websocket.Conn
@@ -41,11 +48,28 @@ type AgentConnection struct {
 	Status        *agent.StatusData
 	mu            sync.RWMutex
 
-	// 心跳存活检测：记录最近的心跳时间戳
-	heartbeatTimes []time.Time
+	// writeMu 串行化 WebSocket 写操作。
+	// gorilla/websocket 只允许一个并发写者，并发调用 WriteJSON 会直接 panic
+	// （concurrent write to websocket connection）并拖垮整个面板进程。
+	// 面板侧有多条路径会写同一连接：配置推送、命令下发、自更新通知。
+	writeMu sync.Mutex
 }
 
-// IsAlive 判断 Agent 是否存活（12秒内心跳达到4次）
+// Send 串行化地发送消息到 Agent。
+// 所有写操作必须走这个方法，禁止直接调用 Conn.WriteJSON。
+func (c *AgentConnection) Send(v interface{}) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if c.Conn == nil {
+		return fmt.Errorf("连接已关闭")
+	}
+	// 写超时：对端不读（半开连接、网络黑洞）时不能让写操作永久阻塞，
+	// 否则会把这个 goroutine 连同写锁一起挂死。
+	_ = c.Conn.SetWriteDeadline(time.Now().Add(agentWriteWait))
+	return c.Conn.WriteJSON(v)
+}
+
+// IsAlive 判断 Agent 是否存活：距最后一次心跳不超过 agentAliveWindow。
 func (c *AgentConnection) IsAlive() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -53,16 +77,10 @@ func (c *AgentConnection) IsAlive() bool {
 	if c.Conn == nil {
 		return false
 	}
-
-	// 统计 12 秒内的心跳次数
-	cutoff := time.Now().Add(-12 * time.Second)
-	count := 0
-	for _, t := range c.heartbeatTimes {
-		if t.After(cutoff) {
-			count++
-		}
+	if c.LastHeartbeat.IsZero() {
+		return false
 	}
-	return count >= 4
+	return time.Since(c.LastHeartbeat) <= agentAliveWindow
 }
 
 // AgentHub Agent 连接管理器
@@ -75,6 +93,12 @@ type AgentHub struct {
 	pendingMu      sync.RWMutex
 	syncDebounce   *time.Timer // 配置同步防抖定时器
 	syncDebounceMu sync.Mutex
+
+	// pendingMetrics 暂存每台服务器最新一次心跳指标，由后台定时器批量落库。
+	// 心跳是 2 秒一次，若每次心跳都写 SQLite（一次 SELECT 加两到三次 UPDATE）
+	// 会形成持续的写放大与锁竞争；实时展示走内存，落库只需保持足够新即可。
+	pendingMetrics map[uint]*agent.HeartbeatData
+	metricsMu      sync.Mutex
 }
 
 // AgentMessage 带连接的消息
@@ -88,11 +112,17 @@ var agentHub = &AgentHub{
 	serverMap:  make(map[uint]*AgentConnection),
 	msgChan:    make(chan *AgentMessage, 100),
 	pendingReq: make(map[string]chan *agent.Message),
+
+	pendingMetrics: make(map[uint]*agent.HeartbeatData),
 }
+
+// metricsFlushInterval 心跳指标落库间隔。
+const metricsFlushInterval = 30 * time.Second
 
 // InitAgentHub starts the agent hub message pump. Called from NewServer.
 func InitAgentHub() {
 	go agentHub.run()
+	go agentHub.metricsFlushLoop()
 }
 
 func (h *AgentHub) run() {
@@ -126,7 +156,7 @@ func (h *AgentHub) handleRegister(conn *AgentConnection, msg *agent.Message) {
 	// 验证 Token 并查找服务器
 	var server database.Server
 	if err := database.GetDB().Where("agent_token = ?", data.Token).First(&server).Error; err != nil {
-		conn.Conn.WriteJSON(&agent.Message{
+		conn.Send(&agent.Message{
 			Type:  agent.MsgTypeRegisterResp,
 			Error: "认证失败",
 		})
@@ -146,6 +176,12 @@ func (h *AgentHub) handleRegister(conn *AgentConnection, msg *agent.Message) {
 	h.serverMap[server.ID] = conn
 	h.mu.Unlock()
 
+	// 清除该服务器的已推送配置哈希：新连接上的 Agent 可能已经丢了配置
+	// （重启/换机/首次注册），若沿用旧哈希会被判定「无变化」而永不推送。
+	pushedConfigHashMu.Lock()
+	delete(pushedConfigHash, server.ID)
+	pushedConfigHashMu.Unlock()
+
 	// 更新服务器状态
 	updates := map[string]interface{}{
 		"agent_online":   true,
@@ -163,7 +199,7 @@ func (h *AgentHub) handleRegister(conn *AgentConnection, msg *agent.Message) {
 	database.GetDB().Model(&server).Updates(updates)
 
 	// 发送注册成功响应
-	conn.Conn.WriteJSON(&agent.Message{
+	conn.Send(&agent.Message{
 		Type:      agent.MsgTypeRegisterResp,
 		Timestamp: time.Now().Unix(),
 	})
@@ -182,63 +218,95 @@ func (h *AgentHub) handleHeartbeat(conn *AgentConnection, msg *agent.Message) {
 		conn.Status = &agent.StatusData{}
 	}
 	conn.Status.HeartbeatData = data
-
-	// 记录心跳时间，用于存活判断
-	conn.heartbeatTimes = append(conn.heartbeatTimes, now)
-	// 清理 12 秒前的旧记录
-	cutoff := now.Add(-12 * time.Second)
-	validTimes := make([]time.Time, 0, len(conn.heartbeatTimes))
-	for _, t := range conn.heartbeatTimes {
-		if t.After(cutoff) {
-			validTimes = append(validTimes, t)
-		}
-	}
-	conn.heartbeatTimes = validTimes
 	conn.mu.Unlock()
 
-	// 更新数据库
+	// 只暂存到内存，由 metricsFlushLoop 定期批量落库。
+	// 实时指标（CPU/内存/磁盘/网速）由 /servers/status 直接读内存，
+	// 不依赖这里写库的频率。
 	if conn.ServerID > 0 {
-		// 先获取上次的 transfer 值
-		var server database.Server
-		if err := database.GetDB().Select("last_net_in_transfer", "last_net_out_transfer").
-			Where("id = ?", conn.ServerID).First(&server).Error; err == nil {
-
-			// 计算差值（仅当新值大于旧值时累加，避免服务器重启导致负值）
-			var deltaIn, deltaOut uint64
-			if data.NetInTransfer > server.LastNetInTransfer && server.LastNetInTransfer > 0 {
-				deltaIn = data.NetInTransfer - server.LastNetInTransfer
-			}
-			if data.NetOutTransfer > server.LastNetOutTransfer && server.LastNetOutTransfer > 0 {
-				deltaOut = data.NetOutTransfer - server.LastNetOutTransfer
-			}
-
-			// 更新实时状态和上次 transfer 值
-			updates := map[string]interface{}{
-				"last_heartbeat":        time.Now(),
-				"cpu_usage":             data.CPUPercent,
-				"mem_usage":             data.MemPercent,
-				"disk_usage":            data.DiskPercent,
-				"net_in":                data.NetIn,
-				"net_out":               data.NetOut,
-				"last_net_in_transfer":  data.NetInTransfer,
-				"last_net_out_transfer": data.NetOutTransfer,
-			}
-			if data.LocalIP != "" {
-				updates["host"] = data.LocalIP
-			}
-			if data.LocalIPv6 != "" {
-				updates["host_ipv6"] = data.LocalIPv6
-			}
-			database.GetDB().Model(&database.Server{}).Where("id = ?", conn.ServerID).Updates(updates)
-
-			// 累加月度流量（使用精确差值）
-			if deltaIn > 0 || deltaOut > 0 {
-				database.GetDB().Model(&database.Server{}).Where("id = ?", conn.ServerID).
-					UpdateColumn("monthly_in", gorm.Expr("monthly_in + ?", deltaIn)).
-					UpdateColumn("monthly_out", gorm.Expr("monthly_out + ?", deltaOut))
-			}
-		}
+		cp := data
+		h.metricsMu.Lock()
+		h.pendingMetrics[conn.ServerID] = &cp
+		h.metricsMu.Unlock()
 	}
+}
+
+// metricsFlushLoop 定期把内存里的心跳指标写回数据库。
+func (h *AgentHub) metricsFlushLoop() {
+	ticker := time.NewTicker(metricsFlushInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.flushAllMetrics()
+	}
+}
+
+// flushAllMetrics 取走并落库全部待写入指标。
+func (h *AgentHub) flushAllMetrics() {
+	h.metricsMu.Lock()
+	pending := h.pendingMetrics
+	h.pendingMetrics = make(map[uint]*agent.HeartbeatData, len(pending))
+	h.metricsMu.Unlock()
+
+	for serverID, data := range pending {
+		h.flushServerMetrics(serverID, data)
+	}
+}
+
+// flushServerMetrics 落库单台服务器的心跳指标并累加月度流量。
+func (h *AgentHub) flushServerMetrics(serverID uint, data *agent.HeartbeatData) {
+	if serverID == 0 || data == nil {
+		return
+	}
+
+	// 先取上次落库的 transfer 值，用于计算增量
+	var server database.Server
+	if err := database.GetDB().Select("last_net_in_transfer", "last_net_out_transfer").
+		Where("id = ?", serverID).First(&server).Error; err != nil {
+		return
+	}
+
+	// 计算差值（仅当新值大于旧值时累加，避免服务器重启导致负值）
+	var deltaIn, deltaOut uint64
+	if data.NetInTransfer > server.LastNetInTransfer && server.LastNetInTransfer > 0 {
+		deltaIn = data.NetInTransfer - server.LastNetInTransfer
+	}
+	if data.NetOutTransfer > server.LastNetOutTransfer && server.LastNetOutTransfer > 0 {
+		deltaOut = data.NetOutTransfer - server.LastNetOutTransfer
+	}
+
+	updates := map[string]interface{}{
+		"last_heartbeat":        time.Now(),
+		"cpu_usage":             data.CPUPercent,
+		"mem_usage":             data.MemPercent,
+		"disk_usage":            data.DiskPercent,
+		"net_in":                data.NetIn,
+		"net_out":               data.NetOut,
+		"last_net_in_transfer":  data.NetInTransfer,
+		"last_net_out_transfer": data.NetOutTransfer,
+	}
+	if data.LocalIP != "" {
+		updates["host"] = data.LocalIP
+	}
+	if data.LocalIPv6 != "" {
+		updates["host_ipv6"] = data.LocalIPv6
+	}
+	database.GetDB().Model(&database.Server{}).Where("id = ?", serverID).Updates(updates)
+
+	// 累加月度流量（使用精确差值）
+	if deltaIn > 0 || deltaOut > 0 {
+		database.GetDB().Model(&database.Server{}).Where("id = ?", serverID).
+			UpdateColumn("monthly_in", gorm.Expr("monthly_in + ?", deltaIn)).
+			UpdateColumn("monthly_out", gorm.Expr("monthly_out + ?", deltaOut))
+	}
+}
+
+// flushServerMetricsNow 立即落库某台服务器的待写指标（断连时收尾用）
+func (h *AgentHub) flushServerMetricsNow(serverID uint) {
+	h.metricsMu.Lock()
+	data := h.pendingMetrics[serverID]
+	delete(h.pendingMetrics, serverID)
+	h.metricsMu.Unlock()
+	h.flushServerMetrics(serverID, data)
 }
 
 func (h *AgentHub) handleStatus(conn *AgentConnection, msg *agent.Message) {
@@ -296,7 +364,7 @@ func (h *AgentHub) SendCommand(serverID uint, msg *agent.Message, timeout time.D
 	}()
 
 	// 发送消息
-	if err := conn.Conn.WriteJSON(msg); err != nil {
+	if err := conn.Send(msg); err != nil {
 		return nil, err
 	}
 
@@ -322,7 +390,7 @@ func (h *AgentHub) SendNotify(serverID uint, msg *agent.Message) error {
 	msg.ID = generateMsgID()
 	msg.Timestamp = time.Now().Unix()
 
-	return conn.Conn.WriteJSON(msg)
+	return conn.Send(msg)
 }
 
 // IsAgentOnline 检查 Agent 是否在线（12秒内心跳达到4次）
@@ -343,9 +411,14 @@ func (h *AgentHub) GetAgentStatus(serverID uint) *agent.StatusData {
 		return nil
 	}
 
+	// 返回副本：调用方在锁外读取字段，直接暴露共享指针会与心跳写入构成数据竞争
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
-	return conn.Status
+	if conn.Status == nil {
+		return nil
+	}
+	cp := *conn.Status
+	return &cp
 }
 
 // RemoveAgent 移除 Agent
@@ -356,6 +429,8 @@ func (h *AgentHub) RemoveAgent(agentID string) {
 	if conn, ok := h.agents[agentID]; ok {
 		if conn.ServerID > 0 {
 			delete(h.serverMap, conn.ServerID)
+			// 断连前把最后一批指标落库，避免丢掉最后一个刷新周期内的流量统计
+			h.flushServerMetricsNow(conn.ServerID)
 			// 更新服务器离线状态
 			database.GetDB().Model(&database.Server{}).Where("id = ?", conn.ServerID).Update("agent_online", false)
 		}
@@ -413,15 +488,15 @@ func (h *AgentHub) doSyncConfig() {
 	h.mu.RLock()
 	aliveAgents := make([]struct {
 		ServerID uint
-		Conn     *websocket.Conn
+		Conn     *AgentConnection
 	}, 0, len(h.serverMap))
 
 	for serverID, conn := range h.serverMap {
 		if conn != nil && conn.IsAlive() {
 			aliveAgents = append(aliveAgents, struct {
 				ServerID uint
-				Conn     *websocket.Conn
-			}{serverID, conn.Conn})
+				Conn     *AgentConnection
+			}{serverID, conn})
 		}
 	}
 	h.mu.RUnlock()
@@ -432,7 +507,7 @@ func (h *AgentHub) doSyncConfig() {
 
 	// 每个 Agent 独立的 goroutine 处理，完全异步
 	for _, agentInfo := range aliveAgents {
-		go func(serverID uint, conn *websocket.Conn) {
+		go func(serverID uint, conn *AgentConnection) {
 			// 数据库查询在 goroutine 中执行，不阻塞主流程
 			var server database.Server
 			if err := database.GetDB().First(&server, serverID).Error; err != nil {
@@ -442,6 +517,17 @@ func (h *AgentHub) doSyncConfig() {
 			// 生成配置
 			config, err := GenerateServerConfig(&server, "sing-box")
 			if err != nil {
+				return
+			}
+
+			// 按服务器比对配置指纹：内容没变就不推送，避免无谓地重启该服务器的
+			// sing-box（重启会掐断该节点上所有用户的连接）。全局指纹只能说明
+			// 「某个地方变了」，不能说明这台服务器变了。
+			sum := fmt.Sprintf("%x", sha256.Sum256([]byte(config)))
+			pushedConfigHashMu.Lock()
+			unchanged := pushedConfigHash[serverID] == sum
+			pushedConfigHashMu.Unlock()
+			if unchanged && !force {
 				return
 			}
 
@@ -461,8 +547,13 @@ func (h *AgentHub) doSyncConfig() {
 				Timestamp: time.Now().Unix(),
 			}
 
-			// 单向发送，不等待响应
-			conn.WriteJSON(msg)
+			// 单向发送，不等待响应（Send 内部有写锁）
+			if err := conn.Send(msg); err != nil {
+				return
+			}
+			pushedConfigHashMu.Lock()
+			pushedConfigHash[serverID] = sum
+			pushedConfigHashMu.Unlock()
 		}(agentInfo.ServerID, agentInfo.Conn)
 	}
 }
@@ -473,6 +564,10 @@ func BroadcastConfigUpdate() {
 }
 
 var (
+	// 每台服务器最近一次成功推送的配置哈希，用于跳过无变化的推送
+	pushedConfigHash   = make(map[uint]string)
+	pushedConfigHashMu sync.Mutex
+
 	configPushForce   bool
 	configPushForceMu sync.Mutex
 )
@@ -503,6 +598,17 @@ func (e *TimeoutError) Error() string {
 	return "请求超时"
 }
 
+// Agent 连接保活参数。
+// 此前两侧都没有 ping/pong 与读超时：面板被 kill 或 NAT 静默断链时，
+// agent 会永久阻塞在 ReadJSON 上不会重连，面板侧也会残留永不回收的
+// 僵尸连接（fd + goroutine 泄漏）。
+const (
+	agentPongWait  = 30 * time.Second // 允许的最久无入站数据
+	agentPingEvery = 10 * time.Second // 必须显著小于 agentPongWait
+	agentWriteWait = 10 * time.Second
+	agentReadLimit = 4 << 20 // 单帧上限，防超大消息
+)
+
 // handleAgentWebSocket 处理 Agent WebSocket 连接
 func (s *Server) handleAgentWebSocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -514,12 +620,42 @@ func (s *Server) handleAgentWebSocket(c *gin.Context) {
 		Conn: conn,
 	}
 
+	conn.SetReadLimit(agentReadLimit)
+	_ = conn.SetReadDeadline(time.Now().Add(agentPongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(agentPongWait))
+	})
+
+	// 面板主动 ping；写控制帧同样要走写锁，避免与业务消息并发写
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(agentPingEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				agentConn.writeMu.Lock()
+				_ = conn.SetWriteDeadline(time.Now().Add(agentWriteWait))
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				agentConn.writeMu.Unlock()
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
 	// 读取消息循环
 	for {
 		var msg agent.Message
 		if err := conn.ReadJSON(&msg); err != nil {
 			break
 		}
+		// 收到任何入站数据都视为活跃（agent 每 2 秒发心跳）
+		_ = conn.SetReadDeadline(time.Now().Add(agentPongWait))
 
 		agentHub.msgChan <- &AgentMessage{
 			Conn:    agentConn,
@@ -859,21 +995,28 @@ func (s *Server) handleUpdateAgents(c *gin.Context) {
 	}
 
 	// 收集存活的 Agent
-	aliveCount := 0
+	// 先在读锁内收集连接，释放锁后再发送：
+	// 持锁做网络写会阻塞整个 hub 的注册/心跳处理。
+	var targets []*AgentConnection
 	agentHub.mu.RLock()
 	for _, server := range servers {
 		if conn, ok := agentHub.serverMap[server.ID]; ok && conn != nil && conn.IsAlive() {
-			// 发送自我更新指令
-			selfUpdateMsg := &agent.Message{
-				ID:        generateMsgID(),
-				Type:      agent.MsgTypeSelfUpdate,
-				Timestamp: time.Now().Unix(),
-			}
-			conn.Conn.WriteJSON(selfUpdateMsg)
-			aliveCount++
+			targets = append(targets, conn)
 		}
 	}
 	agentHub.mu.RUnlock()
+
+	aliveCount := 0
+	for _, conn := range targets {
+		selfUpdateMsg := &agent.Message{
+			ID:        generateMsgID(),
+			Type:      agent.MsgTypeSelfUpdate,
+			Timestamp: time.Now().Unix(),
+		}
+		if err := conn.Send(selfUpdateMsg); err == nil {
+			aliveCount++
+		}
+	}
 
 	if aliveCount == 0 {
 		errorJSON(c, http.StatusBadRequest, "没有存活的 Agent")

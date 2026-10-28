@@ -146,19 +146,30 @@ func (s *Server) handleGetAllServersStatus(c *gin.Context) {
 
 	statuses := make([]ServerStatus, len(servers))
 	for i, srv := range servers {
-		// 使用实时的存活判断（12秒内心跳达到4次）
+		// 使用实时的存活判断
 		agentOnline := agentHub.IsAgentOnline(srv.ID)
-		statuses[i] = ServerStatus{
+		st := ServerStatus{
 			ID:          srv.ID,
 			AgentOnline: agentOnline,
-			CpuUsage:    srv.CpuUsage,
-			MemUsage:    srv.MemUsage,
-			DiskUsage:   srv.DiskUsage,
-			NetIn:       srv.NetIn,
-			NetOut:      srv.NetOut,
-			MonthlyIn:   srv.MonthlyIn,
-			MonthlyOut:  srv.MonthlyOut,
+			// 默认用库里的值：Agent 离线时那是最后一次落库的快照
+			CpuUsage:   srv.CpuUsage,
+			MemUsage:   srv.MemUsage,
+			DiskUsage:  srv.DiskUsage,
+			NetIn:      srv.NetIn,
+			NetOut:     srv.NetOut,
+			MonthlyIn:  srv.MonthlyIn,
+			MonthlyOut: srv.MonthlyOut,
 		}
+		// 在线时直接取内存里的最新心跳，避免受批量落库间隔影响，
+		// 也让心跳高频上报不再依赖高频写库。
+		if live := agentHub.GetAgentStatus(srv.ID); live != nil {
+			st.CpuUsage = live.CPUPercent
+			st.MemUsage = live.MemPercent
+			st.DiskUsage = live.DiskPercent
+			st.NetIn = live.NetIn
+			st.NetOut = live.NetOut
+		}
+		statuses[i] = st
 	}
 
 	successJSON(c, gin.H{
