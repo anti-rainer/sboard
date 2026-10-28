@@ -372,6 +372,11 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 			ruleSet := NewOrderedMap()
 			ruleSet.Set("tag", rs.Tag)
 			ruleSet.Set("type", rs.Type)
+			// format 必须输出：模板里可能是 source（JSON）而默认是 binary，
+			// 丢掉 format 会让 source 格式的规则集按二进制解析而失败。
+			if rs.Format != "" {
+				ruleSet.Set("format", rs.Format)
+			}
 			if rs.Path != "" {
 				ruleSet.Set("path", rs.Path)
 			}
