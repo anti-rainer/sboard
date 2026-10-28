@@ -88,6 +88,51 @@ func (s *Server) handleSubByUUID(c *gin.Context) {
 	s.handleSublink(c)
 }
 
+// handleSubByPath 处理路径式订阅地址：
+//
+//	/subscribe/<uuid>/<node>/<client>/<file>
+//
+// client 段决定输出格式，末尾 file 只是给客户端认后缀，服务端不校验文件名
+// 与 client 是否匹配（用户手改不影响结果）。
+func (s *Server) handleSubByPath(c *gin.Context) {
+	userUUID := c.Param("uuid")
+	if _, err := uuid.Parse(userUUID); err != nil {
+		c.String(http.StatusBadRequest, "无效的 UUID 格式")
+		return
+	}
+
+	// client 段映射到内部 format：mihomo / sing-box 输出 provider 文件，
+	// shadowrocket / loon 输出分流配置。
+	client := strings.ToLower(strings.TrimSpace(c.Param("client")))
+	var format string
+	switch client {
+	case "mihomo", "clash":
+		format = "mihomo-provider"
+	case "sing-box", "singbox", "sing_box":
+		format = "singbox-provider"
+	case "shadowrocket", "sr":
+		format = "shadowrocket"
+	case "loon":
+		format = "loon"
+	case "v2ray", "base64":
+		format = "v2ray"
+	default:
+		c.String(http.StatusNotFound, "不支持的客户端: "+client)
+		return
+	}
+
+	nodeTag := strings.TrimSpace(c.Param("node"))
+	q := "uuid=" + userUUID + "&format=" + url.QueryEscape(format)
+	// node 段用 "-" 或 "_" 表示不指定节点（走默认的第一个入站节点）
+	if nodeTag != "" && nodeTag != "-" && nodeTag != "_" {
+		q += "&node=" + url.QueryEscape(nodeTag)
+	}
+	c.Request.URL.RawQuery = q
+	c.Set("uuid", userUUID)
+
+	s.handleSublink(c)
+}
+
 // handleSublinkPHP 处理旧的 PHP 订阅链接格式
 // 兼容: /sublink.php?user=xxx&node=xxx（旧参数名为 type，仍兼容）
 func (s *Server) handleSublinkPHP(c *gin.Context) {
@@ -288,49 +333,39 @@ func (s *Server) handleSublink(c *gin.Context) {
 	var content string
 	var contentType string
 	var err error
+	scheme := reqScheme(c)
 
 	switch format {
+	// ===== 原始订阅：三种标准格式，内嵌节点，供客户端自适应 =====
 	case "mihomo", "clash":
 		content, err = generateMihomoSubscription(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
 		contentType = "text/yaml; charset=utf-8"
 	case "singbox", "sing-box":
-		// 构建订阅 URL（用于 provider）
-		scheme := "http"
-		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		subURL := fmt.Sprintf("%s://%s/subscribe/%s?format=sing-box", scheme, c.Request.Host, userUUID)
-
+		subURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "sing-box", nodeTag)
 		content, err = generateSingBoxSubscription(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, subURL)
 		contentType = "application/json; charset=utf-8"
 	case "v2ray", "base64":
 		content, err = generateV2RaySubscription(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
 		contentType = "text/plain; charset=utf-8"
+
+	// ===== provider 文件：只含节点，供 mihomo / sing-box 的 provider 引用 =====
+	case "mihomo-provider":
+		content, err = generateMihomoProvider(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
+		contentType = "text/yaml; charset=utf-8"
+	case "singbox-provider", "sing-box-provider":
+		content, err = generateSingBoxProvider(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
+		contentType = "application/json; charset=utf-8"
+
+	// ===== 客户端分流配置：只含策略组与规则 =====
 	case "loon":
-		// 分离模式：配置只含策略组与规则，节点走 [Remote Proxy] 动态拉取。
-		// 这样节点变化时客户端刷新订阅即可，不必重新导入配置。
-		scheme := reqScheme(c)
 		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon", nodeTag)
 		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-nodes", nodeTag)
 		content, err = generateClientConfig2(formatLoon, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
 		contentType = "text/plain; charset=utf-8"
-
-	case "loon-conf":
-		// 与 loon 等价，保留显式名称便于用户区分
-		scheme := reqScheme(c)
-		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-conf", nodeTag)
-		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-nodes", nodeTag)
-		content, err = generateClientConfig2(formatLoon, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
-		contentType = "text/plain; charset=utf-8"
-
 	case "loon-nodes":
-		// 纯节点清单：供 [Remote Proxy] 拉取。[Proxy] 段只有节点行。
 		content, err = generateLoonNodeList(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
 		contentType = "text/plain; charset=utf-8"
-	case "shadowrocket", "sr", "sr-conf":
-		// 小火箭的 [Proxy] 不支持 URL 引用，配置里不放节点；
-		// 策略组用 policy-regex-filter 匹配 App 内订阅的节点池。
-		scheme := reqScheme(c)
+	case "shadowrocket", "sr":
 		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "shadowrocket", nodeTag)
 		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "v2ray", nodeTag)
 		content, err = generateClientConfig2(formatShadowrocket, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)

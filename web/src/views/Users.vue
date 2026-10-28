@@ -70,17 +70,6 @@
                         </a>
                       </li>
                     </template>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><h6 class="dropdown-header small py-1">指定客户端格式</h6></li>
-                    <li v-for="f in clientFormats" :key="f.value">
-                      <a
-                        class="dropdown-item small"
-                        href="#"
-                        @click.prevent="copyFormatLink(user, f.value)"
-                      >
-                        <i :class="f.icon"></i> {{ f.label }}
-                      </a>
-                    </li>
                   </ul>
                 </div>
               </div>
@@ -324,29 +313,6 @@ function copyToClipboard(text: string): Promise<void> {
       }
     }
   })
-}
-
-// 指定客户端格式的订阅链接。不带 format 时由 UA 自动判断，
-// 但 Loon / Shadowrocket 的 UA 不一定稳定，显式指定更可靠。
-const clientFormats = [
-  { value: 'mihomo',       label: 'Mihomo / Clash',  icon: 'bi bi-box' },
-  { value: 'sing-box',     label: 'sing-box',        icon: 'bi bi-box-seam' },
-  { value: 'v2ray',        label: 'v2rayN / base64', icon: 'bi bi-file-text' },
-  // Loon / Shadowrocket 的配置与节点分离：配置只含策略组与规则，
-  // 节点通过配置内部引用的订阅地址动态拉取，节点变化无需重导配置。
-  { value: 'loon',         label: 'Loon 远程配置',    icon: 'bi bi-phone' },
-  { value: 'shadowrocket', label: 'Shadowrocket 远程配置', icon: 'bi bi-rocket' }
-]
-
-function copyFormatLink(user: User, format: string) {
-  const url = `${window.location.origin}/subscribe/${user.uuid}?format=${format}`
-  copyToClipboard(url).then(() => {
-    const f = clientFormats.find(x => x.value === format)
-    showToast('success', '成功', `已复制 ${f?.label || format} 订阅链接`)
-  }).catch(() => {
-    showToast('error', '错误', '复制失败')
-  })
-  openDropdownId.value = null
 }
 
 function copySubLink(user: User, nodeTag: string, lv3Only: boolean) {

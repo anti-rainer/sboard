@@ -18,30 +18,20 @@ func detectUserAgent(c *gin.Context) string {
 	if strings.Contains(ua, "sing-box") || strings.Contains(ua, "singbox") {
 		return "singbox"
 	}
-	// Loon 与 Shadowrocket 要放在 clash 判断之前：
-	// Shadowrocket 的 UA 里也带 "clash" 字样，先匹配会被误判成 mihomo。
-	if strings.Contains(ua, "loon") {
-		return "loon"
-	}
-	if strings.Contains(ua, "shadowrocket") {
-		return "shadowrocket"
-	}
+	// 注意：原始订阅链接只下发三种标准格式（mihomo / sing-box / v2ray），
+	// 且节点内嵌。Loon 与 Shadowrocket 的分流配置是独立的路径式地址
+	// （/subscribe/<uuid>/<node>/loon/sboard.conf），不参与 UA 自适应。
+	// 所以这里不能返回 loon / shadowrocket——否则原始链接会被当成配置文件。
+	//
+	// Shadowrocket 的 UA 里也含 "clash" 字样，它落到下面的 mihomo 分支，
+	// 拿到的是标准 mihomo YAML，这是它可以接受的内嵌节点格式。
 	if strings.Contains(ua, "clash") || strings.Contains(ua, "mihomo") || strings.Contains(ua, "stash") {
 		return "mihomo"
-	}
-	if strings.Contains(ua, "shadowrocket") {
-		return "v2ray"
 	}
 	if strings.Contains(ua, "v2ray") || strings.Contains(ua, "v2rayng") || strings.Contains(ua, "quantumult") {
 		return "v2ray"
 	}
-	if strings.Contains(ua, "surge") {
-		return "v2ray"
-	}
-	if strings.Contains(ua, "loon") {
-		return "v2ray"
-	}
-	if strings.Contains(ua, "passwall") {
+	if strings.Contains(ua, "surge") || strings.Contains(ua, "passwall") {
 		return "v2ray"
 	}
 

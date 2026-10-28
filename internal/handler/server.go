@@ -176,6 +176,14 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/sub/:uuid", s.handleSubByUUID)       // 短订阅链接
 	s.router.GET("/subscribe/:uuid", s.handleSubByUUID) // 兼容格式
 
+	// 路径式客户端配置与 provider 地址，形如
+	//   /subscribe/<uuid>/<node>/mihomo/sboard.yaml
+	//   /subscribe/<uuid>/<node>/sing-box/sboard.json
+	//   /subscribe/<uuid>/<node>/shadowrocket/sboard.conf
+	//   /subscribe/<uuid>/<node>/loon/sboard.conf
+	// 末段文件名只为客户端识别后缀，服务端按 <client> 段决定输出。
+	s.router.GET("/subscribe/:uuid/:node/:client/:file", s.handleSubByPath)
+
 	// Agent WebSocket 端点（使用 token 认证）
 	s.router.GET("/api/agent/ws", s.handleAgentWebSocket)
 
