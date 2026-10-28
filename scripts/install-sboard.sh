@@ -37,7 +37,37 @@ DEV_MODE="false"
 DEV_DOMAIN_HASH="9de17c968ada26abec13fc5fc264ddfa"
 
 # GitHub 加速配置 (国内加速)
+# 加速域名候选。单一域名可能在某些网络下解析失败或不可达
+# （实测生产机的 DNS 解析不了 ghfast.top），所以按顺序尝试，全部失败后直连。
 GH_PROXY="https://ghfast.top/"
+GH_PROXIES=(
+    "https://ghfast.top/"
+    "https://v6.gh-proxy.org/"
+    ""                      # 空字符串表示直连 GitHub
+)
+
+# fetch_with_fallback <目标路径> <相对 GitHub 的路径，如 owner/repo/...>
+# 依次用各个加速前缀尝试下载，首个成功即返回。
+fetch_with_fallback() {
+    local dest="$1"
+    local rel="$2"
+    local proxy url
+    for proxy in "${GH_PROXIES[@]}"; do
+        if [[ -n "$proxy" ]]; then
+            url="${proxy}https://${rel}"
+        else
+            url="https://${rel}"
+        fi
+        if curl -fsSL -L --connect-timeout 20 --max-time 600 "$url" -o "$dest" 2>/dev/null; then
+            if [[ -s "$dest" ]]; then
+                echo "  下载成功: $url"
+                return 0
+            fi
+        fi
+        [[ -n "$proxy" ]] && echo "  该源不可用: $url" >&2
+    done
+    return 1
+}
 
 # 服务文件路径
 SYSTEMD_SERVICE="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -467,22 +497,21 @@ download_and_install() {
     if [[ "$DEV_MODE" == "true" ]]; then
         # 开发者模式：使用预发布版本
         warning "开发者模式：使用预发布版本"
-        DOWNLOAD_URL="${GH_PROXY}https://github.com/${GITHUB_REPO}/releases/download/pre-release/${DOWNLOAD_FILE}"
+        RELEASE_PATH="${GITHUB_REPO}/releases/download/pre-release/${DOWNLOAD_FILE}"
     else
         # 正常模式：使用最新正式版
-        DOWNLOAD_URL="${GH_PROXY}https://github.com/${GITHUB_REPO}/releases/latest/download/${DOWNLOAD_FILE}"
+        RELEASE_PATH="${GITHUB_REPO}/releases/latest/download/${DOWNLOAD_FILE}"
     fi
-    
+
     # 创建临时目录
     TMP_DIR=$(mktemp -d)
     cd "$TMP_DIR"
-    
-    info "下载: $DOWNLOAD_URL"
-    if ! curl -fsSL -L --connect-timeout 30 "$DOWNLOAD_URL" -o "${DOWNLOAD_FILE}"; then
+
+    info "下载: ${DOWNLOAD_FILE}（多源自动回退）"
+    if ! fetch_with_fallback "${DOWNLOAD_FILE}" "github.com/${RELEASE_PATH}"; then
         rm -rf "$TMP_DIR"
-        error "下载失败，请检查网络或 ${OS}_${ARCH} 构建是否存在"
+        error "所有下载源均失败，请检查网络或 ${OS}_${ARCH} 构建是否存在"
     fi
-    info "下载成功"
     
     # 解压
     unzip -q "${DOWNLOAD_FILE}"
@@ -843,17 +872,37 @@ do_logs() {
     fi
 }
 
+# 引导脚本下载：多加速源依次尝试，全部失败后直连 GitHub。
+# 单一域名（如 ghfast.top）在部分网络下会解析失败，不能硬编码一次就放弃。
+fetch_install_script() {
+    local dest="$1"
+    local rel="raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"
+    local proxy url
+    for proxy in "https://ghfast.top/" "https://v6.gh-proxy.org/" ""; do
+        if [[ -n "$proxy" ]]; then
+            url="${proxy}https://${rel}"
+        else
+            url="https://${rel}"
+        fi
+        if curl -fsSL --connect-timeout 15 --max-time 120 -o "$dest" "$url" 2>/dev/null && [[ -s "$dest" ]]; then
+            echo -e "${GREEN}使用下载源: ${url}${NC}"
+            return 0
+        fi
+    done
+    return 1
+}
+
 do_update() {
     echo -e "${CYAN}正在更新 SBoard...${NC}"
     local tmp_script=$(mktemp)
     local rc=1
-    if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"; then
+    if fetch_install_script "$tmp_script"; then
         chmod +x "$tmp_script"
         bash "$tmp_script" update
         rc=$?
         rm -f "$tmp_script"
     else
-        echo -e "${RED}下载更新脚本失败${NC}"
+        echo -e "${RED}下载更新脚本失败（所有加速源与直连均不可用）${NC}"
         rm -f "$tmp_script"
     fi
     # 子脚本会把本文件（/usr/local/bin/sboard）整体重写。bash 是按字节偏移
@@ -866,12 +915,12 @@ do_update() {
 do_uninstall() {
     echo -e "${CYAN}正在卸载 SBoard...${NC}"
     local tmp_script=$(mktemp)
-    if curl -fsSL -o "$tmp_script" "https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"; then
+    if fetch_install_script "$tmp_script"; then
         chmod +x "$tmp_script"
         bash "$tmp_script" uninstall
         rm -f "$tmp_script"
     else
-        echo -e "${RED}下载卸载脚本失败${NC}"
+        echo -e "${RED}下载卸载脚本失败（所有加速源与直连均不可用）${NC}"
         rm -f "$tmp_script"
     fi
 }

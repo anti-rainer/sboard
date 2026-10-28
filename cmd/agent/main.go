@@ -96,6 +96,16 @@ type Message struct {
 	Error     string          `json:"error,omitempty"`
 }
 
+// SelfUpdateData 自我更新指令数据。
+// 仓库地址与加速域名由面板下发，避免 agent 二进制里硬编码：
+// 仓库转移或加速域名失效时无需重新编译 agent。
+type SelfUpdateData struct {
+	Repo            string   `json:"repo"`
+	ReleaseType     string   `json:"release_type,omitempty"`
+	Proxy           string   `json:"proxy,omitempty"`
+	FallbackProxies []string `json:"fallback_proxies,omitempty"`
+}
+
 func main() {
 	var (
 		configPath string
@@ -1375,15 +1385,59 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 	}, nil
 }
 
+// 自我更新的最终兜底值：仅在面板未下发配置时使用。
+// 正常情况下 repo / releaseType / proxy 全部来自面板的 self_update 指令，
+// 这样仓库转移或加速域名失效时不需要重新编译 agent。
+const (
+	fallbackUpdateRepo = "anti-rainer/sboard"
+	fallbackUpdateProxy = "https://ghfast.top/"
+)
+
 // handleSelfUpdate 处理自我更新指令（单向通知，不返回响应）
-func (a *Agent) handleSelfUpdate(_ *Message) {
+func (a *Agent) handleSelfUpdate(msg *Message) {
 	// 延迟 2 秒执行，等待部署核心指令完成
 	time.Sleep(2 * time.Second)
 
 	log.Printf("开始自我更新 (平台: %s/%s)", runtime.GOOS, runtime.GOARCH)
 
-	// 确定下载 URL
-	// 格式: https://github.com/anti-rainer/sboard/releases/latest/download/sboard-agent_{os}_{arch}.zip
+	// 优先使用面板下发的参数
+	var cfg SelfUpdateData
+	if msg != nil && msg.Data != nil {
+		if err := json.Unmarshal(msg.Data, &cfg); err != nil {
+			log.Printf("解析自我更新参数失败，使用内置默认值: %v", err)
+		}
+	}
+
+	repo := cfg.Repo
+	if repo == "" {
+		repo = fallbackUpdateRepo
+		log.Printf("面板未下发仓库地址，使用内置默认值: %s", repo)
+	}
+
+	releaseType := cfg.ReleaseType
+	if releaseType == "" {
+		releaseType = "latest/download"
+		if a.isDevDomain() {
+			releaseType = "download/pre-release"
+			log.Printf("开发者模式：使用预发布版本")
+		}
+	}
+
+	// 加速前缀集合：面板下发的首选 + 回退列表；都没下发才用内置默认
+	proxies := []string{}
+	if p := strings.TrimSpace(cfg.Proxy); p != "" {
+		proxies = append(proxies, p)
+	}
+	for _, p := range cfg.FallbackProxies {
+		if p = strings.TrimSpace(p); p != "" {
+			proxies = append(proxies, p)
+		}
+	}
+	if len(proxies) == 0 && cfg.Proxy == "" && len(cfg.FallbackProxies) == 0 {
+		proxies = append(proxies, fallbackUpdateProxy)
+		log.Printf("面板未下发加速地址，使用内置默认值: %s", fallbackUpdateProxy)
+	}
+
 	osName := runtime.GOOS
 	archName := runtime.GOARCH
 
@@ -1396,28 +1450,32 @@ func (a *Agent) handleSelfUpdate(_ *Message) {
 	case "386":
 		archName = "386"
 	case "arm":
-		// 检查是否为 armv7
 		// Go 在 armv7 设备上报告为 "arm"，需要检查 GOARM
 		archName = "armv7" // 默认使用 armv7，兼容性更好
 	}
 
-	// 文件名格式：sboard-agent_{os}_{arch}.zip
 	zipFileName := fmt.Sprintf("sboard-agent_%s_%s.zip", osName, archName)
 
-	// 检查是否使用预发布版本（根据面板域名判断）
-	releaseType := "latest/download"
-	if a.isDevDomain() {
-		releaseType = "download/pre-release"
-		log.Printf("开发者模式：使用预发布版本")
-	}
-
-	// ZIP 继续使用加速地址，校验文件从 GitHub 直取，避免下载代理同时
-	// 控制制品和校验值。
-	releaseURL := fmt.Sprintf("https://github.com/anti-rainer/sboard/releases/%s", releaseType)
-	downloadURL := fmt.Sprintf("https://ghfast.top/%s/%s", releaseURL, zipFileName)
+	// 校验文件从 GitHub 直取，避免下载代理同时控制制品和校验值
+	releaseURL := fmt.Sprintf("https://github.com/%s/releases/%s", repo, releaseType)
 	checksumsURL := releaseURL + "/checksums.txt"
 
-	log.Printf("下载地址: %s", downloadURL)
+	// 依次尝试各个加速前缀，最后一个候选是直连（空前缀）
+	var candidates []string
+	for _, p := range proxies {
+		if !strings.HasSuffix(p, "/") {
+			p += "/"
+		}
+		candidates = append(candidates, p+releaseURL+"/"+zipFileName)
+	}
+	candidates = append(candidates, releaseURL+"/"+zipFileName)
+
+	log.Printf("下载候选地址 (%d 个):", len(candidates))
+	for _, u := range candidates {
+		log.Printf("  %s", u)
+	}
+	// 首个候选仅用于日志展示，实际下载在下面按列表逐个尝试
+	_ = candidates[0]
 
 	// 获取当前可执行文件路径
 	execPath, err := os.Executable()
@@ -1440,10 +1498,30 @@ func (a *Agent) handleSelfUpdate(_ *Message) {
 	}
 	defer os.Remove(tempChecksumsPath)
 
-	// 下载 zip 文件到临时路径
+	// 下载 zip 文件到临时路径。按候选列表依次尝试：
+	// 首选加速地址失败就换下一个，最后直连 GitHub。
 	tempZipPath := execPath + ".zip"
-	if err := downloadFile(downloadURL, tempZipPath); err != nil {
-		log.Printf("下载新版本失败: %v", err)
+	var dlErr error
+	downloaded := false
+	for i, u := range candidates {
+		if err := downloadFile(u, tempZipPath); err != nil {
+			log.Printf("下载失败 [%d/%d] %s: %v", i+1, len(candidates), u, err)
+			os.Remove(tempZipPath)
+			dlErr = err
+			continue
+		}
+		if fi, err := os.Stat(tempZipPath); err != nil || fi.Size() < 1024*1024 {
+			log.Printf("下载文件异常（过小）[%d/%d] %s", i+1, len(candidates), u)
+			os.Remove(tempZipPath)
+			dlErr = fmt.Errorf("下载文件过小")
+			continue
+		}
+		log.Printf("下载成功: %s", u)
+		downloaded = true
+		break
+	}
+	if !downloaded {
+		log.Printf("所有下载地址均失败: %v", dlErr)
 		os.Remove(tempZipPath)
 		return
 	}

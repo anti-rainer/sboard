@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -983,6 +986,61 @@ func (s *Server) handleDeployAll(c *gin.Context) {
 	})
 }
 
+// 自我更新相关的默认值。可在系统设置里覆盖：
+//   update_repo      仓库（owner/name）
+//   update_proxy     首选加速前缀
+//   update_fallbacks 逗号分隔的回退加速前缀
+const (
+	defaultUpdateRepo  = "anti-rainer/sboard"
+	defaultUpdateProxy = "https://ghfast.top/"
+)
+
+// buildSelfUpdateData 组装下发给 Agent 的自我更新参数。
+func buildSelfUpdateData() *agent.SelfUpdateData {
+	repo := GetSetting("update_repo")
+	if repo == "" {
+		repo = defaultUpdateRepo
+	}
+
+	proxy := GetSetting("update_proxy")
+	if proxy == "" {
+		proxy = defaultUpdateProxy
+	}
+
+	var fallbacks []string
+	if raw := GetSetting("update_fallbacks"); raw != "" {
+		for _, p := range strings.Split(raw, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				fallbacks = append(fallbacks, p)
+			}
+		}
+	} else {
+		// 内置一组可用的回退源，避免单一加速域名解析失败导致更新不可用
+		fallbacks = []string{"https://v6.gh-proxy.org/"}
+	}
+
+	// 预发布版本由面板域名决定，与 agent 自身的判断保持一致
+	releaseType := "latest/download"
+	if domain := GetSetting("subscribe_domain"); domain != "" && isDevDomainName(domain) {
+		releaseType = "download/pre-release"
+	}
+
+	return &agent.SelfUpdateData{
+		Repo:            repo,
+		ReleaseType:     releaseType,
+		Proxy:           proxy,
+		FallbackProxies: fallbacks,
+	}
+}
+
+// isDevDomainName 判断域名是否为开发者域名（决定用预发布版还是正式版）
+func isDevDomainName(domain string) bool {
+	const devDomainHash = "9de17c968ada26abec13fc5fc264ddfa"
+	// 与安装脚本、agent 保持一致：对域名做 MD5 比对
+	h := md5.Sum([]byte(domain))
+	return hex.EncodeToString(h[:]) == devDomainHash
+}
+
 // handleUpdateAgents 更新所有 Agent（向所有存活 Agent 发送自我更新指令）
 func (s *Server) handleUpdateAgents(c *gin.Context) {
 	// 获取所有启用的服务器
@@ -1009,12 +1067,18 @@ func (s *Server) handleUpdateAgents(c *gin.Context) {
 	}
 	agentHub.mu.RUnlock()
 
+	// 由面板下发仓库地址与加速域名，避免 agent 二进制里硬编码：
+	// 仓库转移或某个加速域名失效时，改这里即可，不需要重新编译 agent。
+	updateData := buildSelfUpdateData()
+
 	aliveCount := 0
 	for _, conn := range targets {
+		rawData, _ := json.Marshal(updateData)
 		selfUpdateMsg := &agent.Message{
 			ID:        generateMsgID(),
 			Type:      agent.MsgTypeSelfUpdate,
 			Timestamp: time.Now().Unix(),
+			Data:      rawData,
 		}
 		if err := conn.Send(selfUpdateMsg); err == nil {
 			aliveCount++

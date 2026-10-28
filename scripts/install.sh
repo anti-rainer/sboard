@@ -9,15 +9,43 @@
 set -e
 
 # GitHub 配置
+# 加速域名候选，按顺序尝试，全部失败后直连 GitHub
+GH_PROXIES=(
+    "https://ghfast.top/"
+    "https://v6.gh-proxy.org/"
+    ""
+)
 GH_PROXY="https://ghfast.top/"
-SCRIPT_URL="${GH_PROXY}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"
+
+# download_script <dest>
+# 依次用各加速前缀下载引导脚本
+download_script() {
+    local dest="$1"
+    local proxy url
+    for proxy in "${GH_PROXIES[@]}"; do
+        if [[ -n "$proxy" ]]; then
+            url="${proxy}https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"
+        else
+            url="https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"
+        fi
+        if curl -fsSL --connect-timeout 15 --max-time 120 "$url" -o "$dest" 2>/dev/null && [[ -s "$dest" ]]; then
+            SCRIPT_URL="$url"
+            return 0
+        fi
+    done
+    return 1
+}
 
 # 检测操作系统
 case "$(uname -s 2>/dev/null)" in
     Linux|linux|Darwin|darwin)
         # Linux/macOS: 下载脚本到临时文件后执行
         TMP_SCRIPT=$(mktemp)
-        curl -fsSL "$SCRIPT_URL" -o "$TMP_SCRIPT"
+        if ! download_script "$TMP_SCRIPT"; then
+            echo -e "${RED}下载安装脚本失败（所有加速源与直连均不可用）${NC}" >&2
+            rm -f "$TMP_SCRIPT"
+            exit 1
+        fi
         chmod +x "$TMP_SCRIPT"
         # 透传全部参数给子脚本；有终端时把 stdin 接回终端以保留交互能力，
         # 无终端（CI/管道）时直接执行，避免 /dev/tty 打不开而失败。

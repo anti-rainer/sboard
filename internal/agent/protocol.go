@@ -142,6 +142,20 @@ type DeployCoreRespData struct {
 	OtherRunning bool   `json:"other_running"`
 }
 
+// SelfUpdateData 自我更新指令数据。
+// 仓库地址与加速域名由面板下发，避免 agent 二进制里硬编码：
+// 仓库转移、加速域名失效时无需重新编译 agent。
+type SelfUpdateData struct {
+	// Repo 形如 "anti-rainer/sboard"
+	Repo string `json:"repo"`
+	// ReleaseType 为 "latest/download" 或 "download/pre-release"
+	ReleaseType string `json:"release_type,omitempty"`
+	// Proxy 加速前缀，如 "https://ghfast.top/"；留空表示直连 GitHub
+	Proxy string `json:"proxy,omitempty"`
+	// FallbackProxies 加速失败时依次尝试的前缀
+	FallbackProxies []string `json:"fallback_proxies,omitempty"`
+}
+
 // NewMessage 创建新消息
 func NewMessage(msgType MessageType, data interface{}) (*Message, error) {
 	var rawData json.RawMessage
