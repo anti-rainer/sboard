@@ -181,12 +181,12 @@ func buildLoonRemoteFilters(cfg *MihomoSubscriptionConfig, remoteAlias string, a
 		if name == "" || seen[name] || name == remoteAlias {
 			continue
 		}
-		// 该策略组在当前配置下没有任何节点时跳过：
-		// Loon 对匹配不到节点的筛选会告警，规则指向它也无意义。
+		// 注意：即使当前没有匹配节点也要声明筛选条目。
+		// 分离模式下节点由客户端运行时拉取，生成配置时看不到未来新增的节点；
+		// 若因为没有匹配就跳过，用户加了该地区节点后配置里仍无此条目，
+		// 策略组只能退化成指向整个订阅，分流随之失效。
+		// 正则本身按地区关键词写，节点出现后自然能筛到。
 		members := resolveGroupMembers(pg, allNodes, countryNodes)
-		if len(members) == 0 {
-			continue
-		}
 		seen[name] = true
 		// geoip-cn 的国内组：筛选条目改名为 <name>-Nodes，把 <name> 让给
 		// 带 DIRECT 的 select 组（规则里引用的是 <name>）。
@@ -284,67 +284,74 @@ func countryKeywords(code string) []string {
 
 // buildLoonGroupsSeparated 生成分离模式的 Loon 策略组。
 //
-// 成员直接用 [Remote Proxy] 别名和 [Remote Filter] 名——两者都能当策略引用。
+// 严格按面板 mihomo 的策略组列表输出，不额外加 Proxy/Auto 等组。
+// 每个组的成员构成与 mihomo 一致：
+//
+//   - geoip-cn + "!cn"     → 海外节点（[Remote Filter] 筛选条目）
+//   - geoip-cn + "cn"      → DIRECT + 国内节点
+//   - regex / geoip-country → 按正则筛出的节点
+//
+// Loon 的限制：[Remote Filter] 只能筛订阅节点，无法混入 DIRECT。
+// 所以国内组拆成两部分——筛选条目叫「国内-Nodes」提供节点，
+// 再建同名「国内」select 组把 DIRECT 和它并列，规则引用的仍是「国内」。
 func buildLoonGroupsSeparated(cfg *MihomoSubscriptionConfig, remoteAlias string, filterNames []string) []string {
-	// 主组：自动测速、直连、节点订阅、各筛选组
-	members := []string{"Auto", "DIRECT", remoteAlias}
-	members = append(members, filterNames...)
-
-	out := []string{
-		"Proxy = select, " + strings.Join(members, ", "),
-		"Auto = url-test, " + remoteAlias + ", url=" + clientTestURL + ", interval=600, tolerance=50",
+	if cfg == nil {
+		return nil
+	}
+	var out []string
+	hasFilter := make(map[string]bool, len(filterNames))
+	for _, n := range filterNames {
+		hasFilter[n] = true
 	}
 
-	// 国内组必须能选 DIRECT（mihomo 里该组成员是 [DIRECT, 国内节点]）。
-	// [Remote Filter] 只能筛选节点、无法混入 DIRECT，所以国内组单独声明为
-	// 显式 select 组：DIRECT + 对应筛选条目。策略名与规则引用保持一致——
-	// 规则里写的是「国内」，这里用「国内-Direct」会引用不到，故沿用原名并
-	// 通过重命名筛选条目的方式腾出「国内」这个名字。
-	if cfg != nil {
-		for _, pg := range cfg.Config.ProxyGroups {
-			if pg.FilterMode != "geoip-cn" || strings.TrimSpace(pg.Filter) != "cn" {
-				continue
-			}
-			name := sanitizeClientName(pg.Name)
-			if name == "" {
-				continue
-			}
-			out = append(out, fmt.Sprintf("%s = select, DIRECT, %s-Nodes", name, name))
+	for _, pg := range cfg.Config.ProxyGroups {
+		name := sanitizeClientName(pg.Name)
+		if name == "" {
+			continue
 		}
-	}
 
-	// 国内筛选组必须能选 DIRECT：与 mihomo 一致，否则国内流量还得走代理。
-	// [Remote Filter] 已经声明了同名条目，[Rule] 直接引用它即可；
-	// 这里不再额外造 -Auto 组，避免策略名重复和混淆。
+		// 国内组：DIRECT + 国内节点筛选条目
+		if pg.FilterMode == "geoip-cn" && strings.TrimSpace(pg.Filter) == "cn" {
+			out = append(out, fmt.Sprintf("%s = select, DIRECT, %s-Nodes", name, name))
+			continue
+		}
+
+		// 其它组：若已有同名 [Remote Filter] 条目，直接引用它
+		if hasFilter[name] {
+			out = append(out, fmt.Sprintf("%s = select, %s", name, name))
+			continue
+		}
+
+		// 没有筛选条目（该地区无节点）：退化为可选节点订阅本身
+		out = append(out, fmt.Sprintf("%s = select, %s", name, remoteAlias))
+	}
 	return out
 }
 
 // buildShadowrocketGroupsSeparated 生成分离模式的 Shadowrocket 策略组。
 //
-// 用 policy-regex-filter 按地区关键词正则筛节点（与小火箭 UI 里的
-// 「策略组-正则筛选」等价），节点增删或改名后依然匹配得到。
+// 严格按面板 mihomo 的策略组列表输出，不额外加 PROXY/Auto 等组。
+// Shadowrocket 的 select 组支持同时列出策略名和 policy-regex-filter，
+// 所以国内组可以写成「DIRECT + 正则筛选」，与 mihomo 的 [DIRECT, 国内节点] 一致。
 func buildShadowrocketGroupsSeparated(cfg *MihomoSubscriptionConfig) []string {
-	out := []string{
-		"PROXY = select, policy-regex-filter=.*",
-		"Auto = url-test, policy-regex-filter=.*, url=" + clientTestURL + ", interval=600, tolerance=50",
-	}
 	if cfg == nil {
-		return out
+		return nil
 	}
+	var out []string
 	for _, pg := range cfg.Config.ProxyGroups {
 		name := sanitizeClientName(pg.Name)
-		if name == "" || name == "PROXY" || name == "Auto" {
+		if name == "" {
 			continue
 		}
 		pattern := groupNameRegex(pg, nil)
 
-		// 国内组要能选 DIRECT：mihomo 里该组成员是 [DIRECT, 国内节点]。
-		// Shadowrocket 用 policy-regex-filter 时无法混入 DIRECT，
-		// 所以给国内组单独写成显式的 select 组并带上 DIRECT。
+		// 国内组：DIRECT 与正则筛选并列，用户可自行选 DIRECT 或某个国内节点
 		if pg.FilterMode == "geoip-cn" && strings.TrimSpace(pg.Filter) == "cn" {
-			out = append(out, fmt.Sprintf("%s = select, DIRECT", name))
+			out = append(out, fmt.Sprintf("%s = select, DIRECT, policy-regex-filter=%s", name, pattern))
 			continue
 		}
+
+		// 其它组：仅按正则筛节点
 		out = append(out, fmt.Sprintf("%s = select, policy-regex-filter=%s", name, pattern))
 	}
 	return out
