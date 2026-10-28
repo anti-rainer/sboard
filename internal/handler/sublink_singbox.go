@@ -192,20 +192,37 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 	}
 
 	// 4. HTTP Clients
-	if len(tpl.HttpClients) > 0 {
-		var httpClients []*OrderedMap
-		for _, hc := range tpl.HttpClients {
-			client := NewOrderedMap()
-			client.Set("tag", hc.Tag)
-			client.Set("version", hc.Version)
-			if len(hc.Headers) > 0 {
-				client.Set("headers", hc.Headers)
-			}
-			if hc.Detour != "" {
-				client.Set("detour", hc.Detour)
-			}
-			httpClients = append(httpClients, client)
+	// 规则集下载需要一个走 DIRECT 的 http client：不指定时 sing-box 会用
+	// route.final（通常是代理组）去拉规则集，于是客户端启动必须先通过代理
+	// 把规则集下载完——代理不可达就整个启动失败。这里确保该 client 存在。
+	directClientTag := ""
+	var httpClients []*OrderedMap
+	for _, hc := range tpl.HttpClients {
+		client := NewOrderedMap()
+		client.Set("tag", hc.Tag)
+		client.Set("version", hc.Version)
+		if len(hc.Headers) > 0 {
+			client.Set("headers", hc.Headers)
 		}
+		if hc.Detour != "" {
+			client.Set("detour", hc.Detour)
+			if hc.Detour == "DIRECT" && directClientTag == "" {
+				directClientTag = hc.Tag
+			}
+		}
+		httpClients = append(httpClients, client)
+	}
+	if directClientTag == "" && len(tpl.Route.RuleSets) > 0 {
+		// 注意：这里不能写 detour: "DIRECT"。sing-box 会报
+		// "detour to an empty direct outbound makes no sense"——不带 detour
+		// 的 http_client 本身就是直连，这才是正确写法。
+		directClientTag = "direct_client"
+		client := NewOrderedMap()
+		client.Set("tag", directClientTag)
+		client.Set("version", 0)
+		httpClients = append(httpClients, client)
+	}
+	if len(httpClients) > 0 {
 		config.Set("http_clients", httpClients)
 	}
 
@@ -360,6 +377,11 @@ func generateSingBoxSubscription(servers []ServerWithNodes, nodeConfigs map[uint
 			}
 			if rs.URL != "" {
 				ruleSet.Set("url", rs.URL)
+			}
+			// 用 http_client 指定下载出站（1.14 起 download_detour 已废弃，
+			// 将在 1.16 移除），避免启动阶段依赖代理可达性
+			if directClientTag != "" {
+				ruleSet.Set("http_client", directClientTag)
 			}
 			ruleSets = append(ruleSets, ruleSet)
 		}
