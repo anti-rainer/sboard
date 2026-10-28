@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -150,9 +151,22 @@ func resolveGroupMembers(pg MihomoProxyGroup, allNodes []string, countryNodes ma
 		if pg.Filter == "" || pg.Filter == ".*" {
 			return allNodes
 		}
+		// 用真正的正则匹配，支持 (?i) 忽略大小写、锚点、交替等写法。
+		// 原来只做了 strings.Contains，像 "(?i)hk|香港" 这种模式永远匹配不到。
+		re, err := regexp.Compile(pg.Filter)
+		if err != nil {
+			// 模式写错时退化为子串匹配，避免整份订阅生成失败
+			var out []string
+			for _, n := range allNodes {
+				if strings.Contains(n, pg.Filter) {
+					out = append(out, n)
+				}
+			}
+			return out
+		}
 		var out []string
 		for _, n := range allNodes {
-			if strings.Contains(n, pg.Filter) {
+			if re.MatchString(n) {
 				out = append(out, n)
 			}
 		}

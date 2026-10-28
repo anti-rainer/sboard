@@ -120,7 +120,7 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 	case fmtType == formatLoon:
 		groups = buildLoonGroupsSeparated(cfg, "SBoard", filterNames)
 	default:
-		groups = buildShadowrocketGroupsSeparated(cfg, clientGroupNames(cfg))
+		groups = buildShadowrocketGroupsSeparated(cfg)
 	}
 	for _, g := range groups {
 		b.WriteString(g)
@@ -136,20 +136,6 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 	}
 
 	return b.String(), nil
-}
-
-// clientGroupNames 返回配置里除内置组之外的策略组名。
-func clientGroupNames(cfg *MihomoSubscriptionConfig) []string {
-	if cfg == nil {
-		return nil
-	}
-	var out []string
-	for _, pg := range cfg.Config.ProxyGroups {
-		if name := sanitizeClientName(pg.Name); name != "" {
-			out = append(out, name)
-		}
-	}
-	return out
 }
 
 // loonFilter 一条 [Remote Filter] 定义。
@@ -186,13 +172,12 @@ func writeClientGeneral(b *strings.Builder, fmtType clientFormat, selfURL string
 	b.WriteString("\n")
 }
 
-// buildLoonRemoteFilters 用 [Remote Filter] 从订阅里筛出节点子集。
+// buildLoonRemoteFilters 用 [Remote Filter] + NameRegex 从订阅里筛出节点子集。
 //
-// 这里刻意用 NodeSelect 而不是 NameRegex 精确匹配节点名：
-// 分离模式下配置是静态的，而节点由客户端在运行时拉取，节点名可能因
-// 等级调整、服务器改名而变化。把名字写死在配置里，一旦名字变了筛选就
-// 落空。NodeSelect 让用户在 Loon UI 里为该筛选勾选节点，配置不需要知道
-// 具体名字，节点变化也不会让配置失效。
+// 正则按「地区关键词」构造，而不是写死具体节点名：
+// 节点名形如「香港」「hkix-hytron」「shandun-de-英国nat」，把国家对应的
+// 中英文关键词与常见缩写做成交替正则，节点增删或改名后依然能匹配到。
+// 若订阅里完全没有该地区的节点，跳过以免 Loon 告警。
 func buildLoonRemoteFilters(cfg *MihomoSubscriptionConfig, remoteAlias string, allNodes []string, countryNodes map[string][]string) []loonFilter {
 	if cfg == nil {
 		return nil
@@ -205,7 +190,7 @@ func buildLoonRemoteFilters(cfg *MihomoSubscriptionConfig, remoteAlias string, a
 			continue
 		}
 		// 该策略组在当前配置下没有任何节点时跳过：
-		// Loon 对匹配不到节点的筛选会告警，且规则指向它也无意义。
+		// Loon 对匹配不到节点的筛选会告警，规则指向它也无意义。
 		members := resolveGroupMembers(pg, allNodes, countryNodes)
 		if len(members) == 0 {
 			continue
@@ -213,10 +198,90 @@ func buildLoonRemoteFilters(cfg *MihomoSubscriptionConfig, remoteAlias string, a
 		seen[name] = true
 		out = append(out, loonFilter{
 			name: name,
-			line: fmt.Sprintf("%s = NodeSelect, %s", name, remoteAlias),
+			line: fmt.Sprintf("%s = NameRegex, %s, FilterKey = %s", name, remoteAlias, groupNameRegex(pg, members)),
 		})
 	}
 	return out
+}
+
+// groupNameRegex 生成按地区筛节点的正则。
+//
+// 策略：一律输出「地区关键词正则」，而不是精确节点名。
+// 节点名形如「香港」「hkix-hytron」「shandun-de-英国nat」，把国家对应的
+// 中英文关键词与常见缩写做成交替正则后，节点增删、改名、调整等级都还能
+// 匹配到；写死具体名字则一旦改名就筛空。
+//
+// members 是当前解析出的节点，仅在所有关键词策略都失败时兜底使用。
+func groupNameRegex(pg MihomoProxyGroup, members []string) string {
+	switch pg.FilterMode {
+	case "regex":
+		// 用户自己写了正则，直接采用
+		if pg.Filter != "" && pg.Filter != ".*" {
+			return pg.Filter
+		}
+
+	case "geoip-country":
+		var alts []string
+		for _, raw := range strings.Split(pg.Filter, ",") {
+			c := strings.ToUpper(strings.TrimSpace(raw))
+			if c == "" {
+				continue
+			}
+			alts = append(alts, countryKeywords(c)...)
+		}
+		if len(alts) > 0 {
+			return "(?i)" + strings.Join(dedupeStrings(alts), "|")
+		}
+
+	case "geoip-cn":
+		// filter="cn" 取国内；"!cn" 取海外（用负向前瞻排除国内关键词）
+		if strings.TrimSpace(pg.Filter) == "cn" {
+			var alts []string
+			alts = append(alts, countryKeywords("CN")...)
+			if len(alts) > 0 {
+				return "(?i)" + strings.Join(dedupeStrings(alts), "|")
+			}
+		} else {
+			// 海外：排除含国内关键词的节点
+			cnWords := dedupeStrings(countryKeywords("CN"))
+			if len(cnWords) > 0 {
+				return "(?i)^((?!(?:" + strings.Join(cnWords, "|") + ")).)*$"
+			}
+		}
+	}
+
+	// 兜底：精确匹配当前已知节点名
+	return buildExactNameRegex(members)
+}
+
+// countryKeywords 国家代码 → 节点名里可能出现的关键词。
+// 覆盖中文名、英文名与常见缩写，兼顾大小写不敏感匹配。
+func countryKeywords(code string) []string {
+	switch code {
+	case "HK", "UK", "GB":
+		return map[string][]string{
+			"HK": {"香港", "HKG", "hkix", "HK"},
+			"UK": {"英国", "UK", "GBR", "GB", "London", "伦敦"},
+			"GB": {"英国", "UK", "GBR", "GB", "London", "伦敦"},
+		}[code]
+	case "CZ":
+		return []string{"捷克", "CZ", "CZE", "Czech", "Praha"}
+	case "US":
+		return []string{"美国", "US", "USA", "United States", "Los Angeles", "洛杉矶", "Seattle", "西雅图"}
+	case "JP":
+		return []string{"日本", "JP", "JPN", "Japan", "Tokyo", "东京", "大阪", "Osaka"}
+	case "SG":
+		return []string{"新加坡", "SG", "SGP", "Singapore", "狮城"}
+	case "DE":
+		return []string{"德国", "DE", "DEU", "Germany", "Frankfurt", "法兰克福"}
+	case "KR":
+		return []string{"韩国", "KR", "KOR", "Korea", "Seoul", "首尔"}
+	case "TW":
+		return []string{"台湾", "TW", "TWN", "Taiwan", "台北"}
+	case "CN":
+		return []string{"上海", "北京", "深圳", "广州", "家宽", "CN", "CHN", "China"}
+	}
+	return []string{code}
 }
 
 // buildLoonGroupsSeparated 生成分离模式的 Loon 策略组。
@@ -242,20 +307,22 @@ func buildLoonGroupsSeparated(cfg *MihomoSubscriptionConfig, remoteAlias string,
 
 // buildShadowrocketGroupsSeparated 生成分离模式的 Shadowrocket 策略组。
 //
-// 分离模式下配置不知道 App 里实际有哪些节点，因此各策略组一律用
-// policy-regex-filter=.* 覆盖全部节点，由用户在小火箭 UI 里为每个组
-// 勾选具体节点。地区组也照此处理——把国家代码写进正则匹配不到节点名
-// （节点名是「香港」「shandun-de-英国nat」这类），只会得到空组。
-func buildShadowrocketGroupsSeparated(cfg *MihomoSubscriptionConfig, groupNames []string) []string {
+// 用 policy-regex-filter 按地区关键词正则筛节点（与小火箭 UI 里的
+// 「策略组-正则筛选」等价），节点增删或改名后依然匹配得到。
+func buildShadowrocketGroupsSeparated(cfg *MihomoSubscriptionConfig) []string {
 	out := []string{
 		"PROXY = select, policy-regex-filter=.*",
 		"Auto = url-test, policy-regex-filter=.*, url=" + clientTestURL + ", interval=600, tolerance=50",
 	}
-	for _, name := range groupNames {
+	if cfg == nil {
+		return out
+	}
+	for _, pg := range cfg.Config.ProxyGroups {
+		name := sanitizeClientName(pg.Name)
 		if name == "" || name == "PROXY" || name == "Auto" {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%s = select, policy-regex-filter=.*", name))
+		out = append(out, fmt.Sprintf("%s = select, policy-regex-filter=%s", name, groupNameRegex(pg, nil)))
 	}
 	return out
 }
