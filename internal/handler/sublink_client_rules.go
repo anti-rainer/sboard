@@ -215,7 +215,13 @@ func translateRules(cfg *MihomoSubscriptionConfig, isLoon bool) (inline []string
 			inline = append(inline, fmt.Sprintf("%s,%s,%s,no-resolve", strings.ToUpper(r.Type), r.Value, policy))
 
 		case "DST-PORT":
-			inline = append(inline, fmt.Sprintf("DST-PORT,%s,%s", r.Value, policy))
+			// mihomo 用斜杠表示端口段（"500/4500"），Shadowrocket / Loon 要求
+			// 逗号分隔的端口列表（"500,4500"），直接搬运会被解析成非法端口。
+			ports := strings.Split(r.Value, "/")
+			for i := range ports {
+				ports[i] = strings.TrimSpace(ports[i])
+			}
+			inline = append(inline, fmt.Sprintf("DST-PORT,%s,%s", strings.Join(ports, ","), policy))
 
 		case "GEOIP":
 			inline = append(inline, fmt.Sprintf("GEOIP,%s,%s", r.Value, policy))
