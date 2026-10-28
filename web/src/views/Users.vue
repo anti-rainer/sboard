@@ -54,23 +54,26 @@
                     <i class="bi bi-link-45deg"></i> 订阅链接
                   </button>
                   <ul 
-                    class="dropdown-menu w-100 shadow" 
+                    class="dropdown-menu w-100 shadow sub-link-menu" 
                     :class="{ show: openDropdownId === user.id }"
                     :style="openDropdownId === user.id ? { display: 'block' } : {}"
                   >
                     <template v-for="node in nodes" :key="node.id">
                       <!-- 每个节点：展开成子菜单 -->
-                      <li class="dropdown-submenu">
+                      <li class="dropdown-submenu"
+                          :class="{ 'is-expanded': openNodeMenu === user.id + '|' + node.tag }">
                         <a
                           class="dropdown-item small d-flex justify-content-between align-items-center"
+                          :class="{ 'is-open': openNodeMenu === user.id + '|' + node.tag }"
                           href="#"
                           @click.prevent.stop="toggleNodeMenu(user.id, node.tag)"
                         >
                           <span><i class="bi bi-hdd-network"></i> {{ node.tag }}</span>
-                          <i class="bi bi-chevron-right small"></i>
+                          <i class="bi small"
+                             :class="openNodeMenu === user.id + '|' + node.tag ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
                         </a>
                         <ul
-                          class="dropdown-menu shadow"
+                          class="dropdown-menu node-submenu shadow"
                           :class="{ show: openNodeMenu === user.id + '|' + node.tag }"
                           :style="openNodeMenu === user.id + '|' + node.tag ? { display: 'block' } : {}"
                         >
@@ -323,7 +326,19 @@ function toggleDropdown(userId: number) {
 
 function toggleNodeMenu(userId: number, nodeTag: string) {
   const key = userId + '|' + nodeTag
-  openNodeMenu.value = openNodeMenu.value === key ? null : key
+  const opening = openNodeMenu.value !== key
+  openNodeMenu.value = opening ? key : null
+
+  // 展开后把该节点滚进可视区：子菜单有 5 项，容器限高时
+  // 靠后的节点展开后底部会被裁掉，用户以为点不到。
+  if (opening) {
+    nextTick(() => {
+      const el = document.querySelector('.dropdown-submenu.is-expanded')
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      }
+    })
+  }
 }
 
 // 路径式客户端配置。client 段由后端映射到具体格式：
@@ -532,23 +547,53 @@ async function doDelete() {
   transform: translate(0px, 38px);
   z-index: 1050;
 }
-/* 节点子菜单：Bootstrap 原生不支持嵌套 dropdown，需手工定位 */
+/* 每个节点项自成一块，保证子菜单展开时把后续节点往下推，
+   而不是浮在上面（缺这条会被下一个 li 覆盖） */
 .dropdown-submenu {
   position: relative;
+  display: block;
 }
-.dropdown-submenu > .dropdown-menu {
-  top: 0;
-  left: 100%;
-  margin-top: -0.25rem;
-  margin-left: 0.125rem;
-  min-width: 12rem;
+/* 节点子菜单：手风琴式，在父菜单内部就地展开。
+   不能用 left:100% 从右侧弹出——手机上主菜单已占满屏宽，
+   子菜单会弹到屏幕外，用户点不到。 */
+.node-submenu {
+  position: static !important;
+  display: none;
+  float: none;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0.15rem 0 0.15rem 1.35rem;
+  border: none;
+  border-left: 2px solid var(--bs-success);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none !important;
 }
-/* 手机窄屏：子菜单改为在右侧展开不下时向左弹出 */
-@media (max-width: 576px) {
-  .dropdown-submenu > .dropdown-menu {
-    left: auto;
-    right: 100%;
-    margin-right: 0.125rem;
-  }
+.node-submenu.show {
+  display: block;
+}
+.node-submenu .dropdown-item {
+  padding-left: 0.6rem;
+  white-space: normal;
+  word-break: break-word;
+}
+/* 主下拉菜单限高可滚，节点多时不至于超出屏幕点不到。
+   注意 min-height 要给足：子菜单展开后内容会变高，若容器高度卡在
+   max-height 边界上，后续节点会被滚出可视区，看起来像互相遮挡。 */
+.sub-link-menu {
+  max-height: min(72vh, 30rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* 展开子菜单时把该节点滚到可视区顶部，保证五项目都能看到 */
+.sub-link-menu .dropdown-submenu.is-expanded {
+  scroll-margin-top: 0.25rem;
+}
+/* 展开的节点项高亮，提示当前在哪个节点下 */
+.dropdown-submenu > a.is-open {
+  background: rgba(25, 135, 84, 0.15);
+  border-radius: 0.25rem;
 }
 </style>
