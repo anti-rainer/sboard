@@ -11,27 +11,11 @@ import (
 // 直接读取面板 mihomo 模板里的 proxyGroups 与 rules，保证三端行为一致。
 
 // buildClientProxyGroups 生成策略组行列表。
+//
+// 严格按面板 mihomo 模板里的 proxyGroups 逐条输出，不额外添加
+// Proxy / PROXY / Auto 之类的组——mihomo 里没有的组这里也不应该有。
 func buildClientProxyGroups(cfg *MihomoSubscriptionConfig, allNodes []string, countryNodes map[string][]string, fmtType clientFormat) []string {
 	var out []string
-
-	isLoon := fmtType == formatLoon
-
-	mainGroup := "Proxy"
-	if !isLoon {
-		mainGroup = "PROXY"
-	}
-	autoName := "Auto"
-
-	// 主选择组：所有节点 + 自动测速组
-	parts := []string{"select", autoName, "DIRECT"}
-	parts = append(parts, allNodes...)
-	out = append(out, fmt.Sprintf("%s = %s", mainGroup, strings.Join(parts, ", ")))
-
-	// 自动测速组
-	autoParts := []string{"url-test"}
-	autoParts = append(autoParts, allNodes...)
-	autoParts = append(autoParts, "url="+clientTestURL, "interval=600", "tolerance=50")
-	out = append(out, fmt.Sprintf("%s = %s", autoName, strings.Join(autoParts, ", ")))
 
 	if cfg == nil {
 		return out
@@ -39,7 +23,7 @@ func buildClientProxyGroups(cfg *MihomoSubscriptionConfig, allNodes []string, co
 
 	for _, pg := range cfg.Config.ProxyGroups {
 		name := sanitizeClientName(pg.Name)
-		if name == "" || name == mainGroup || name == autoName {
+		if name == "" {
 			continue
 		}
 

@@ -69,6 +69,17 @@ func buildSelfSubURL(scheme, host, userUUID, format, nodeTag string) string {
 	return u
 }
 
+// buildPathSubURL 构造路径式订阅地址，末段为文件名。
+// 客户端会拿末段当配置备注名显示（sboard.conf -> sboard）。
+func buildPathSubURL(scheme, host, userUUID, nodeTag, client, file string) string {
+	node := nodeTag
+	if node == "" {
+		node = "-"
+	}
+	return fmt.Sprintf("%s://%s/subscribe/%s/%s/%s/%s",
+		scheme, host, userUUID, url.PathEscape(node), client, file)
+}
+
 // handleSubByUUID 处理短订阅链接 /sub/:uuid 或 /subscribe/:uuid
 func (s *Server) handleSubByUUID(c *gin.Context) {
 	// 从路径参数获取 UUID
@@ -372,7 +383,8 @@ func (s *Server) handleSublink(c *gin.Context) {
 		// App 首页单独添加的订阅节点池。分离模式下 [Proxy] 为空，策略组
 		// 就成了空壳——国内组只有 DIRECT、其它组一个节点都没有。
 		// 所以这里把节点直接写进配置。
-		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "shadowrocket", nodeTag)
+		// update-url 用路径式地址，让客户端把备注显示成 sboard 而非 UUID。
+		selfURL := buildPathSubURL(scheme, c.Request.Host, userUUID, nodeTag, "shadowrocket", "sboard.conf")
 		content, err = generateClientConfig2(formatShadowrocket, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, "")
 		contentType = "text/plain; charset=utf-8"
 	default:
@@ -409,14 +421,31 @@ func (s *Server) handleSublink(c *gin.Context) {
 		}
 	}
 
-	// 设置订阅响应头
-	// Subscription-Userinfo: 流量信息（上传、下载、总量、过期时间）
+	// ===== 订阅信息响应头（机场标准）=====
+	//
+	// 各客户端靠这些头显示机场名、流量、到期时间：
+	//   profile-title            机场名称，base64: 前缀表示内容经过 base64
+	//   subscription-userinfo    upload/download/total/expire（字节 / Unix 秒）
+	//   profile-update-interval  客户端自动更新间隔（小时）
+	//
+	// TrafficUsed / TrafficLimit 在库里以 GB 存储，头里要求字节。
+	// upload 用 0、download 用全部已用量：本系统只记录合计流量，
+	// 不区分上下行，把一个填 0 另一个填合计可让客户端正确显示总量。
+	const bytesPerGB = 1024 * 1024 * 1024
+	totalBytes := user.TrafficLimit * bytesPerGB
+	usedBytes := user.TrafficUsed * bytesPerGB
+	// total=0 表示不限流量，此时 download 仍填已用量以便客户端显示已用
 	c.Header("Subscription-Userinfo", fmt.Sprintf("upload=0; download=%d; total=%d; expire=%d",
-		user.TrafficUsed*1024*1024*1024, user.TrafficLimit*1024*1024*1024, expiryUnix))
-	// profile-title: 机场名称（base64 编码以支持中文）
+		usedBytes, totalBytes, expiryUnix))
+
+	// 机场名称：site_title 未设置时用 "sboard"
+	if siteTitle == "" {
+		siteTitle = "sboard"
+	}
 	c.Header("profile-title", "base64:"+base64.StdEncoding.EncodeToString([]byte(siteTitle)))
-	// profile-update-interval: 自动更新间隔（小时）
+	c.Header("Profile-Title", "base64:"+base64.StdEncoding.EncodeToString([]byte(siteTitle)))
 	c.Header("profile-update-interval", "24")
+	c.Header("Profile-Update-Interval", "24")
 	// profile-web-page-url: 网站地址
 	if profileWebPageURL != "" {
 		c.Header("profile-web-page-url", profileWebPageURL)

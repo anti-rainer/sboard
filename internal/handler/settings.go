@@ -13,7 +13,7 @@ import (
 var defaultSettings = map[string]string{
 	"subscribe_domain":    "",           // 订阅域名
 	"subscribe_path":      "/sublink",   // 订阅路径
-	"site_title":          "SBoard",     // 站点标题
+	"site_title":          "sboard",     // 站点标题（同时作为订阅里的机场名称）
 	"default_core_type":   "sing-box",   // 默认核心类型
 	"default_expiry_days": "30",         // 默认过期天数
 	"ssh_private_key":     "",           // SSH 私钥路径
@@ -27,6 +27,10 @@ var defaultSettings = map[string]string{
 	"update_repo":      "anti-rainer/sboard",  // 仓库 owner/name
 	"update_proxy":     "https://ghfast.top/", // 首选加速前缀
 	"update_fallbacks": "https://v6.gh-proxy.org/", // 逗号分隔的回退加速前缀
+
+	// 客户端分流配置里规则集的加速前缀。GitHub raw 国内直连很慢，
+	// 小火箭导入配置会卡住。设为 none 表示直连。
+	"rule_set_proxy": "https://ghfast.top/",
 }
 
 // SettingsResponse 设置响应

@@ -17,7 +17,37 @@ import (
 //
 // 映射面板里的 ruleProvider tag 到这些路径，分流结果与 mihomo 一致。
 
-const ruleSetRepoBase = "https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset"
+// 规则集基础地址。走 ghfast.top 加速：这些 .list 都在 GitHub raw，
+// 国内直连很慢，小火箭导入配置时会因此长时间卡在「添加中」。
+// 加速前缀可被系统设置 rule_set_proxy 覆盖，留空则直连。
+const (
+	ruleSetRepoBase   = "https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset"
+	defaultRuleSetProxy = "https://ghfast.top/"
+)
+
+// getRuleSetProxy 取规则集加速前缀，可在面板设置里改；设为 "none" 表示直连。
+func getRuleSetProxy() string {
+	p := GetSetting("rule_set_proxy")
+	if p == "" {
+		p = defaultRuleSetProxy
+	}
+	if p == "none" || p == "-" {
+		return ""
+	}
+	if !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p
+}
+
+// buildRuleSetURL 拼接规则集地址，带加速前缀。
+func buildRuleSetURL(path string) string {
+	raw := ruleSetRepoBase + "/" + path
+	if proxy := getRuleSetProxy(); proxy != "" {
+		return proxy + raw
+	}
+	return raw
+}
 
 // ruleSetSpec 规则集在两种客户端里的路径。
 type ruleSetSpec struct {
@@ -77,7 +107,7 @@ func resolveRuleSet(tag string, isLoon bool) (clientRuleSet, bool) {
 	if path == "" {
 		return clientRuleSet{}, false
 	}
-	return clientRuleSet{Tag: tag, URL: ruleSetRepoBase + "/" + path, IsIP: spec.IsIP}, true
+	return clientRuleSet{Tag: tag, URL: buildRuleSetURL(path), IsIP: spec.IsIP}, true
 }
 
 // translateRulesToClient 把面板规则按原顺序翻译成客户端规则。
@@ -132,12 +162,16 @@ func translateRulesToClient(cfg *MihomoSubscriptionConfig, isLoon bool) (inline 
 		case "IP-CIDR6":
 			inline = append(inline, fmt.Sprintf("IP-CIDR6,%s,%s,no-resolve", r.Value, policy))
 		case "DST-PORT":
-			// mihomo 的 "500/4500" 在客户端要写成逗号分隔端口列表
-			ports := strings.Split(r.Value, "/")
-			for i := range ports {
-				ports[i] = strings.TrimSpace(ports[i])
+			// mihomo 用 "500/4500" 表示端口段，但 Shadowrocket / Loon 的
+			// DST-PORT 只接受单个端口，逗号分隔会被当成非法值整条失效。
+			// 一行一个端口展开成多条规则。
+			for _, port := range strings.Split(r.Value, "/") {
+				port = strings.TrimSpace(port)
+				if port == "" {
+					continue
+				}
+				inline = append(inline, fmt.Sprintf("DST-PORT,%s,%s", port, policy))
 			}
-			inline = append(inline, fmt.Sprintf("DST-PORT,%s,%s", strings.Join(ports, ","), policy))
 		case "GEOIP":
 			inline = append(inline, fmt.Sprintf("GEOIP,%s,%s", r.Value, policy))
 		case "MATCH", "FINAL":
