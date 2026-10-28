@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,6 +49,16 @@ type ServerWithNodes struct {
 	Server    database.Server
 	Nodes     []database.InboundNode
 	Outbounds []database.ServerOutbound // 落地出站列表
+}
+
+// buildSelfSubURL 构造订阅自身的 URL（用于配置里的 update-url）。
+// nodeTag 非空时一并带上，保证客户端定时回拉时行为与初次导入一致。
+func buildSelfSubURL(scheme, host, userUUID, format, nodeTag string) string {
+	u := fmt.Sprintf("%s://%s/subscribe/%s?format=%s", scheme, host, userUUID, format)
+	if nodeTag != "" {
+		u += "&node=" + url.QueryEscape(nodeTag)
+	}
+	return u
 }
 
 // handleSubByUUID 处理短订阅链接 /sub/:uuid 或 /subscribe/:uuid
@@ -286,6 +297,24 @@ func (s *Server) handleSublink(c *gin.Context) {
 		contentType = "application/json; charset=utf-8"
 	case "v2ray", "base64":
 		content, err = generateV2RaySubscription(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
+		contentType = "text/plain; charset=utf-8"
+	case "loon":
+		scheme := "http"
+		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		// 必须把 node 参数一并带进 update-url：Loon 定时回来拉配置时
+		// 若丢了 node，会退化成「全部节点」，与用户当初选的不一致。
+		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon", nodeTag)
+		content, err = generateClientConfig(formatLoon, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL)
+		contentType = "text/plain; charset=utf-8"
+	case "shadowrocket", "sr":
+		scheme := "http"
+		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "shadowrocket", nodeTag)
+		content, err = generateClientConfig(formatShadowrocket, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL)
 		contentType = "text/plain; charset=utf-8"
 	default:
 		c.String(http.StatusBadRequest, "不支持的格式: "+format)

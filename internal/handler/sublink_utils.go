@@ -18,6 +18,14 @@ func detectUserAgent(c *gin.Context) string {
 	if strings.Contains(ua, "sing-box") || strings.Contains(ua, "singbox") {
 		return "singbox"
 	}
+	// Loon 与 Shadowrocket 要放在 clash 判断之前：
+	// Shadowrocket 的 UA 里也带 "clash" 字样，先匹配会被误判成 mihomo。
+	if strings.Contains(ua, "loon") {
+		return "loon"
+	}
+	if strings.Contains(ua, "shadowrocket") {
+		return "shadowrocket"
+	}
 	if strings.Contains(ua, "clash") || strings.Contains(ua, "mihomo") || strings.Contains(ua, "stash") {
 		return "mihomo"
 	}

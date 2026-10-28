@@ -239,7 +239,10 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 		return fmt.Sprintf("tuic://%s:%s@%s:%d?%s#%s", p.UUID, tuicPassword, formatHostForURL(p.Host), p.Port, params.Encode(), url.PathEscape(p.Name))
 
 	case "socks":
-		return fmt.Sprintf("socks://%s:%s@%s:%d#%s", url.QueryEscape(p.Name), url.QueryEscape(p.UUID), formatHostForURL(p.Host), p.Port, url.PathEscape(p.Name))
+		// 服务端 inbound 的 socks 用户是 username=user.Name / password=user.UUID
+		// （见 config_sync.go 的 case "socks"）。此前这里把节点名当用户名，
+		// 客户端拿去认证必然被拒。
+		return fmt.Sprintf("socks://%s:%s@%s:%d#%s", url.QueryEscape(user.Name), url.QueryEscape(p.UUID), formatHostForURL(p.Host), p.Port, url.PathEscape(p.Name))
 
 	case "naive":
 		params := url.Values{}
