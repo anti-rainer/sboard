@@ -51,6 +51,14 @@ type ServerWithNodes struct {
 	Outbounds []database.ServerOutbound // 落地出站列表
 }
 
+// reqScheme 判断当前请求的协议。
+func reqScheme(c *gin.Context) string {
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		return "https"
+	}
+	return "http"
+}
+
 // buildSelfSubURL 构造订阅自身的 URL（用于配置里的 update-url）。
 // nodeTag 非空时一并带上，保证客户端定时回拉时行为与初次导入一致。
 func buildSelfSubURL(scheme, host, userUUID, format, nodeTag string) string {
@@ -299,22 +307,33 @@ func (s *Server) handleSublink(c *gin.Context) {
 		content, err = generateV2RaySubscription(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
 		contentType = "text/plain; charset=utf-8"
 	case "loon":
-		scheme := "http"
-		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		// 必须把 node 参数一并带进 update-url：Loon 定时回来拉配置时
-		// 若丢了 node，会退化成「全部节点」，与用户当初选的不一致。
+		// 分离模式：配置只含策略组与规则，节点走 [Remote Proxy] 动态拉取。
+		// 这样节点变化时客户端刷新订阅即可，不必重新导入配置。
+		scheme := reqScheme(c)
 		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon", nodeTag)
-		content, err = generateClientConfig(formatLoon, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL)
+		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-nodes", nodeTag)
+		content, err = generateClientConfig2(formatLoon, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
 		contentType = "text/plain; charset=utf-8"
-	case "shadowrocket", "sr":
-		scheme := "http"
-		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
+
+	case "loon-conf":
+		// 与 loon 等价，保留显式名称便于用户区分
+		scheme := reqScheme(c)
+		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-conf", nodeTag)
+		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-nodes", nodeTag)
+		content, err = generateClientConfig2(formatLoon, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
+		contentType = "text/plain; charset=utf-8"
+
+	case "loon-nodes":
+		// 纯节点清单：供 [Remote Proxy] 拉取。[Proxy] 段只有节点行。
+		content, err = generateLoonNodeList(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
+		contentType = "text/plain; charset=utf-8"
+	case "shadowrocket", "sr", "sr-conf":
+		// 小火箭的 [Proxy] 不支持 URL 引用，配置里不放节点；
+		// 策略组用 policy-regex-filter 匹配 App 内订阅的节点池。
+		scheme := reqScheme(c)
 		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "shadowrocket", nodeTag)
-		content, err = generateClientConfig(formatShadowrocket, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL)
+		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "v2ray", nodeTag)
+		content, err = generateClientConfig2(formatShadowrocket, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
 		contentType = "text/plain; charset=utf-8"
 	default:
 		c.String(http.StatusBadRequest, "不支持的格式: "+format)

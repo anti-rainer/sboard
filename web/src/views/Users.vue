@@ -332,8 +332,10 @@ const clientFormats = [
   { value: 'mihomo',       label: 'Mihomo / Clash',  icon: 'bi bi-box' },
   { value: 'sing-box',     label: 'sing-box',        icon: 'bi bi-box-seam' },
   { value: 'v2ray',        label: 'v2rayN / base64', icon: 'bi bi-file-text' },
-  { value: 'loon',         label: 'Loon',            icon: 'bi bi-phone' },
-  { value: 'shadowrocket', label: 'Shadowrocket',    icon: 'bi bi-rocket' }
+  // Loon / Shadowrocket 的配置与节点分离：配置只含策略组与规则，
+  // 节点通过配置内部引用的订阅地址动态拉取，节点变化无需重导配置。
+  { value: 'loon',         label: 'Loon 远程配置',    icon: 'bi bi-phone' },
+  { value: 'shadowrocket', label: 'Shadowrocket 远程配置', icon: 'bi bi-rocket' }
 ]
 
 function copyFormatLink(user: User, format: string) {
