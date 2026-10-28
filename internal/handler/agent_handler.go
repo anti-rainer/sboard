@@ -619,6 +619,9 @@ func (s *Server) handleAgentWebSocket(c *gin.Context) {
 	agentConn := &AgentConnection{
 		Conn: conn,
 	}
+	// gorilla 的 Upgrade 会 hijack 底层连接，此后由应用负责关闭。
+	// 缺这一句时每次 Agent 断连都会泄漏一个 fd 和一条 TCP 连接。
+	defer conn.Close()
 
 	conn.SetReadLimit(agentReadLimit)
 	_ = conn.SetReadDeadline(time.Now().Add(agentPongWait))
