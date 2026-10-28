@@ -345,7 +345,11 @@ func buildShadowrocketGroupsSeparated(cfg *MihomoSubscriptionConfig) []string {
 		}
 		pattern := groupNameRegex(pg, nil)
 
-		// 国内组：DIRECT 与正则筛选并列，用户可自行选 DIRECT 或某个国内节点
+		// 国内组：DIRECT 与正则筛选并列。
+		// Shadowrocket 的 policy-regex-filter 是「策略名 + 过滤参数」并列的写法，
+		// DIRECT 作为策略名放在类型之后、过滤参数之前：
+		//   国内 = select,DIRECT,policy-regex-filter=(?i)上海|北京|...
+		// 社区配置（LOWERTOP、lalifeier、Aethersailor 等）均为这一形式。
 		if pg.FilterMode == "geoip-cn" && strings.TrimSpace(pg.Filter) == "cn" {
 			out = append(out, fmt.Sprintf("%s = select, DIRECT, policy-regex-filter=%s", name, pattern))
 			continue

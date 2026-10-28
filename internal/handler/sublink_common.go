@@ -358,17 +358,22 @@ func (s *Server) handleSublink(c *gin.Context) {
 
 	// ===== 客户端分流配置：只含策略组与规则 =====
 	case "loon":
+		// 分流模式：节点直接内嵌在 [Proxy] 段，配策略组与规则，
+		// 客户端导入即用，不需要再单独添加节点订阅。
 		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon", nodeTag)
-		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "loon-nodes", nodeTag)
-		content, err = generateClientConfig2(formatLoon, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
+		content, err = generateClientConfig2(formatLoon, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, "")
 		contentType = "text/plain; charset=utf-8"
 	case "loon-nodes":
 		content, err = generateLoonNodeList(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
 		contentType = "text/plain; charset=utf-8"
 	case "shadowrocket", "sr":
+		// 小火箭必须是内嵌节点模式。
+		// policy-regex-filter 只在 [Proxy] 段已定义的节点里筛选，无法引用
+		// App 首页单独添加的订阅节点池。分离模式下 [Proxy] 为空，策略组
+		// 就成了空壳——国内组只有 DIRECT、其它组一个节点都没有。
+		// 所以这里把节点直接写进配置。
 		selfURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "shadowrocket", nodeTag)
-		nodeURL := buildSelfSubURL(scheme, c.Request.Host, userUUID, "v2ray", nodeTag)
-		content, err = generateClientConfig2(formatShadowrocket, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, nodeURL)
+		content, err = generateClientConfig2(formatShadowrocket, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, "")
 		contentType = "text/plain; charset=utf-8"
 	default:
 		c.String(http.StatusBadRequest, "不支持的格式: "+format)

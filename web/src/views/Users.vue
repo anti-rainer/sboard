@@ -73,24 +73,23 @@
                              :class="openNodeMenu === user.id + '|' + node.tag ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
                         </a>
                         <ul
-                          class="dropdown-menu node-submenu shadow"
-                          :class="{ show: openNodeMenu === user.id + '|' + node.tag }"
-                          :style="openNodeMenu === user.id + '|' + node.tag ? { display: 'block' } : {}"
+                          v-show="openNodeMenu === user.id + '|' + node.tag"
+                          class="node-submenu"
                         >
                           <!-- 原始订阅：三格式自适应，带节点 -->
                           <li>
-                            <a class="dropdown-item small" href="#"
+                            <a class="node-link" href="#"
                                @click.prevent="copySubLink(user, node.tag)">
-                              <i class="bi bi-magic"></i> 原始订阅
-                              <span class="text-muted">（自适应）</span>
+                              <i class="bi bi-magic"></i>
+                              <span>原始订阅 <span class="text-muted">（自适应）</span></span>
                             </a>
                           </li>
-                          <li><hr class="dropdown-divider"></li>
                           <!-- 客户端配置与 provider -->
                           <li v-for="item in clientFiles" :key="item.client">
-                            <a class="dropdown-item small" href="#"
+                            <a class="node-link" href="#"
                                @click.prevent="copyClientFile(user, node.tag, item)">
-                              <i :class="item.icon"></i> {{ item.label }}
+                              <i :class="item.icon"></i>
+                              <span>{{ item.label }}</span>
                             </a>
                           </li>
                         </ul>
@@ -547,53 +546,45 @@ async function doDelete() {
   transform: translate(0px, 38px);
   z-index: 1050;
 }
-/* 每个节点项自成一块，保证子菜单展开时把后续节点往下推，
-   而不是浮在上面（缺这条会被下一个 li 覆盖） */
+/* 节点项：块级元素，子菜单展开时把后续节点往下挤开 */
 .dropdown-submenu {
-  position: relative;
   display: block;
 }
-/* 节点子菜单：手风琴式，在父菜单内部就地展开。
-   不能用 left:100% 从右侧弹出——手机上主菜单已占满屏宽，
-   子菜单会弹到屏幕外，用户点不到。 */
+/* 子菜单：完全自绘，不用 Bootstrap 的 .dropdown-menu。
+   关键点——.dropdown-menu 自带 position:absolute，会把子菜单浮到父菜单
+   之上，视觉上「盖住」后面的节点（vless 被顶进 trojan 的展开板）。
+   这里用普通块级流，靠 max-height 过渡展开。 */
 .node-submenu {
-  position: static !important;
-  display: none;
-  float: none;
-  width: 100%;
-  min-width: 0;
+  list-style: none;
   margin: 0;
-  padding: 0.15rem 0 0.15rem 1.35rem;
-  border: none;
-  border-left: 2px solid var(--bs-success);
-  border-radius: 0;
+  padding: 0 0 0 0.9rem;
+  border-left: 2px solid rgba(25, 135, 84, 0.55);
   background: rgba(255, 255, 255, 0.04);
-  box-shadow: none !important;
+  overflow: hidden;
 }
-.node-submenu.show {
+.node-submenu > li {
   display: block;
 }
-.node-submenu .dropdown-item {
-  padding-left: 0.6rem;
+.node-submenu .node-link {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.34rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--bs-body-color);
+  text-decoration: none;
+  border-radius: 0.25rem;
   white-space: normal;
   word-break: break-word;
+  line-height: 1.25;
 }
-/* 主下拉菜单限高可滚，节点多时不至于超出屏幕点不到。
-   注意 min-height 要给足：子菜单展开后内容会变高，若容器高度卡在
-   max-height 边界上，后续节点会被滚出可视区，看起来像互相遮挡。 */
-.sub-link-menu {
-  max-height: min(72vh, 30rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+.node-submenu .node-link:hover,
+.node-submenu .node-link:active {
+  background: rgba(25, 135, 84, 0.18);
+  color: var(--bs-body-color);
 }
-/* 展开子菜单时把该节点滚到可视区顶部，保证五项目都能看到 */
-.sub-link-menu .dropdown-submenu.is-expanded {
-  scroll-margin-top: 0.25rem;
-}
-/* 展开的节点项高亮，提示当前在哪个节点下 */
-.dropdown-submenu > a.is-open {
-  background: rgba(25, 135, 84, 0.15);
-  border-radius: 0.25rem;
+.node-submenu .node-link i {
+  flex: 0 0 auto;
+  opacity: 0.85;
 }
 </style>
