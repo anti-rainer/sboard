@@ -69,6 +69,17 @@ func buildSelfSubURL(scheme, host, userUUID, format, nodeTag string) string {
 	return u
 }
 
+// buildOriginalSubURL 构造原始订阅地址（UA 自适应、节点内嵌）。
+// 面板上「原始订阅」复制出来的就是这个链接，客户端配置里的
+// update-url 应当指向它，而不是指向配置自身。
+func buildOriginalSubURL(scheme, host, userUUID, nodeTag string) string {
+	u := fmt.Sprintf("%s://%s/subscribe/%s", scheme, host, userUUID)
+	if nodeTag != "" {
+		u += "?node=" + url.QueryEscape(nodeTag)
+	}
+	return u
+}
+
 // subPortalName 机场名，用于路径首段与订阅标题。
 const subPortalName = "sboard"
 
@@ -406,8 +417,9 @@ func (s *Server) handleSublink(c *gin.Context) {
 		// App 首页单独添加的订阅节点池。分离模式下 [Proxy] 为空，策略组
 		// 就成了空壳——国内组只有 DIRECT、其它组一个节点都没有。
 		// 所以这里把节点直接写进配置。
-		// update-url 用路径式地址，让客户端把备注显示成 sboard 而非 UUID。
-		selfURL := buildPathSubURL(scheme, c.Request.Host, userUUID, nodeTag, "shadowrocket", "sboard.conf")
+		// update-url 指向原始订阅，而不是配置自身：客户端回拉时拿到的
+		// 是用户自己的节点订阅，节点与等级变化能自动生效。
+		selfURL := buildOriginalSubURL(scheme, c.Request.Host, userUUID, nodeTag)
 		content, err = generateClientConfig2(formatShadowrocket, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, selfURL, "")
 		contentType = "text/plain; charset=utf-8"
 	default:
