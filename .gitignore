@@ -7,3 +7,4 @@ web/node_modules/
 /sboard-agent
 CODE_REVIEW.md
 /build
+/.deploy/
