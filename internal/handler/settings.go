@@ -30,7 +30,7 @@ var defaultSettings = map[string]string{
 
 	// 客户端分流配置里规则集的加速前缀。GitHub raw 国内直连很慢，
 	// 小火箭导入配置会卡住。设为 none 表示直连。
-	"rule_set_proxy": "https://ghfast.top/",
+	"rule_set_proxy": "https://gh-proxy.org/", // 规则集加速前缀；none 表示直连
 }
 
 // SettingsResponse 设置响应

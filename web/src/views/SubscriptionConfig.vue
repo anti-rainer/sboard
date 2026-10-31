@@ -1903,12 +1903,12 @@ const getDefaultMihomoConfig = (): MihomoConfig => ({
     ],
     // 规则集 (与 sublink.go rule-providers 一致)
     ruleProviders: [
-      { name: 'AI', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://ghfast.top/github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/ai.mrs', interval: 86400, proxy: 'DIRECT' },
-      { name: 'cn_domain', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://ghfast.top/github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/cn.mrs', interval: 86400, proxy: 'DIRECT' },
-      { name: 'cn_ip', type: 'http', behavior: 'ipcidr', format: 'mrs', url: 'https://ghfast.top/github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/ipcidr/cn.mrs', interval: 86400, proxy: 'DIRECT' },
-      { name: 'private_domain', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://ghfast.top/github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/private.mrs', interval: 86400, proxy: 'DIRECT' },
-      { name: 'private_ip', type: 'http', behavior: 'ipcidr', format: 'mrs', url: 'https://ghfast.top/github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/ipcidr/private.mrs', interval: 86400, proxy: 'DIRECT' },
-      { name: 'proxy_domain', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://ghfast.top/github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/proxy.mrs', interval: 86400, proxy: 'DIRECT' }
+      { name: 'AI', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://gh-proxy.org/https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset/meta/domain/ai.mrs', interval: 86400, proxy: 'DIRECT' },
+      { name: 'cn_domain', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://gh-proxy.org/https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset/meta/domain/cn.mrs', interval: 86400, proxy: 'DIRECT' },
+      { name: 'cn_ip', type: 'http', behavior: 'ipcidr', format: 'mrs', url: 'https://gh-proxy.org/https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset/meta/ipcidr/cn.mrs', interval: 86400, proxy: 'DIRECT' },
+      { name: 'private_domain', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://gh-proxy.org/https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset/meta/domain/private.mrs', interval: 86400, proxy: 'DIRECT' },
+      { name: 'private_ip', type: 'http', behavior: 'ipcidr', format: 'mrs', url: 'https://gh-proxy.org/https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset/meta/ipcidr/private.mrs', interval: 86400, proxy: 'DIRECT' },
+      { name: 'proxy_domain', type: 'http', behavior: 'domain', format: 'mrs', url: 'https://gh-proxy.org/https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset/meta/domain/proxy.mrs', interval: 86400, proxy: 'DIRECT' }
     ],
     // 路由规则 (与 sublink.go rules 一致)
     rules: [

@@ -17,21 +17,30 @@ import (
 //
 // 映射面板里的 ruleProvider tag 到这些路径，分流结果与 mihomo 一致。
 
-// 规则集基础地址。走 ghfast.top 加速：这些 .list 都在 GitHub raw，
-// 国内直连很慢，小火箭导入配置时会因此长时间卡在「添加中」。
-// 加速前缀可被系统设置 rule_set_proxy 覆盖，留空则直连。
+// 规则集基础地址 + 加速前缀。
+//
+// 这些 .list 都在 GitHub raw，国内直连不通，必须套加速前缀。
+// 实测各加速域名的可靠性（cn.list 2.8MB × 3 次）：
+//   gh-proxy.org / v6.gh-proxy.org / cdn.gh-proxy.org   全部成功、字节数精确
+//   ghfast.top        多次失败或返回截断内容
+//   ghproxy.net       返回截断内容（1MB 左右就断）
+//   cdn.jsdelivr.net  仓库分支超 50MB 时 403（Package size exceeded）
+//
+// 所以默认用 gh-proxy.org。加速前缀可在面板设置 rule_set_proxy 里改，
+// 设为 none 表示直连。
 const (
-	ruleSetRepoBase   = "https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset"
-	defaultRuleSetProxy = "https://ghfast.top/"
+	ruleSetRepoBase     = "https://raw.githubusercontent.com/QuixoticHeart/rule-set/refs/heads/ruleset"
+	defaultRuleSetProxy = "https://gh-proxy.org/"
 )
 
 // getRuleSetProxy 取规则集加速前缀，可在面板设置里改；设为 "none" 表示直连。
 func getRuleSetProxy() string {
-	p := GetSetting("rule_set_proxy")
+	p := strings.TrimSpace(GetSetting("rule_set_proxy"))
 	if p == "" {
 		p = defaultRuleSetProxy
 	}
-	if p == "none" || p == "-" {
+	// 空串 / none / - 都表示不套加速前缀
+	if p == "" || p == "none" || p == "-" {
 		return ""
 	}
 	if !strings.HasSuffix(p, "/") {
