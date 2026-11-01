@@ -406,6 +406,8 @@ export interface ServerOutbound {
   network: string
   ws_path: string
   ws_host: string
+  /** TLS ALPN，逗号分隔；留空由服务端协商 */
+  alpn: string
   created_at: string
   updated_at: string
 }

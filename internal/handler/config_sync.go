@@ -824,7 +824,15 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 			"enabled":     true,
 			"fingerprint": "chrome",
 		}
+		applyOutboundAlpn(tls, ob.Alpn)
 		outbound["tls"] = tls
+		// trojan 同样支持 ws / grpc / httpupgrade 传输。
+		// 之前漏了这段，走 ws 的 trojan 落地会退化成裸 TCP 连不上。
+		if ob.Network != "" && ob.Network != "tcp" {
+			if transport := buildOutboundTransport(ob); transport != nil {
+				outbound["transport"] = transport
+			}
+		}
 
 	case "anytls":
 		outbound["type"] = "anytls"
@@ -836,6 +844,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		if ob.Sni != "" {
 			tls["server_name"] = ob.Sni
 		}
+		applyOutboundAlpn(tls, ob.Alpn)
 		outbound["tls"] = tls
 
 	case "socks", "socks5":
@@ -870,6 +879,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 				utls["fingerprint"] = "chrome"
 			}
 			tls["utls"] = utls
+			applyOutboundAlpn(tls, ob.Alpn)
 			outbound["tls"] = tls
 		} else if ob.Tls {
 			tls := map[string]interface{}{
@@ -914,6 +924,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 				"enabled":     true,
 				"fingerprint": "chrome",
 			}
+			applyOutboundAlpn(tls, ob.Alpn)
 			outbound["tls"] = tls
 		}
 		// 传输层配置
@@ -934,6 +945,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		if ob.Sni != "" {
 			tls["server_name"] = ob.Sni
 		}
+		applyOutboundAlpn(tls, ob.Alpn)
 		outbound["tls"] = tls
 		if ob.Obfs != "" {
 			outbound["obfs"] = map[string]interface{}{
@@ -971,6 +983,27 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 	}
 
 	return outbound
+}
+
+// applyOutboundAlpn 把 ServerOutbound.Alpn 写进 tls 配置。
+//
+// 接受逗号分隔的多值（h3,h2）与整体写法（http/1.1）。留空则不写，
+// 交给服务端协商——ws over TLS 通常需要 http/1.1，QUIC 系固定 h3。
+func applyOutboundAlpn(tls map[string]interface{}, raw string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return
+	}
+	var alpn []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			alpn = append(alpn, part)
+		}
+	}
+	if len(alpn) > 0 {
+		tls["alpn"] = alpn
+	}
 }
 
 // buildOutboundTransport 构建出站传输层配置

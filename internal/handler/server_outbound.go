@@ -55,6 +55,7 @@ type OutboundRequest struct {
 	Network string `json:"network"`
 	WsPath  string `json:"ws_path"`
 	WsHost  string `json:"ws_host"`
+	Alpn    string `json:"alpn"`
 }
 
 func validateOutboundRequest(req *OutboundRequest) error {
@@ -213,6 +214,7 @@ func (s *Server) handleCreateServerOutbound(c *gin.Context) {
 		Network:          req.Network,
 		WsPath:   req.WsPath,
 		WsHost:   req.WsHost,
+		Alpn:     strings.TrimSpace(req.Alpn),
 	}
 
 	if err := database.GetDB().Create(&outbound).Error; err != nil {
@@ -283,6 +285,7 @@ func (s *Server) handleUpdateServerOutbound(c *gin.Context) {
 	outbound.Network = req.Network
 	outbound.WsPath = req.WsPath
 	outbound.WsHost = req.WsHost
+	outbound.Alpn = strings.TrimSpace(req.Alpn)
 
 	if err := database.GetDB().Save(&outbound).Error; err != nil {
 		errorJSON(c, http.StatusInternalServerError, "更新失败")

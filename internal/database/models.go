@@ -612,8 +612,11 @@ type ServerOutbound struct {
 
 	// 传输层配置 (VMess/VLESS)
 	Network string `gorm:"size:20" json:"network"`  // tcp/ws/grpc/http
-	WsPath  string `gorm:"size:200" json:"ws_path"` // WebSocket path
+	WsPath  string `gorm:"size:200" json:"ws_path"` // WebSocket path（gRPC 时作为 service name）
 	WsHost  string `gorm:"size:200" json:"ws_host"` // WebSocket host header
+	// Alpn TLS ALPN 列表，逗号分隔。QUIC 系固定 h3；
+	// ws over TLS 常见 http/1.1，不写时由服务端协商。
+	Alpn string `gorm:"size:100" json:"alpn"`
 
 	// Country 落地节点的实际出口国家（ISO 3166-1 alpha-2，如 CZ）。
 	// 落地出站的 Host 是【入口】地址，与真实出口位置常常不在同一国家

@@ -484,14 +484,21 @@
                 <input type="text" class="form-control" v-model="outboundData.remark" placeholder="显示为按钮名称，如：美国落地">
               </div>
 
-              <!-- 导入链接 -->
+              <!-- 快速识别：粘贴节点链接自动填充表单 -->
               <div class="mb-3">
-                <label class="form-label small">导入节点链接 (支持 vmess/vless/trojan/ss/hysteria2/anytls/tuic/socks)</label>
+                <label class="form-label">快速识别</label>
                 <div class="input-group">
-                  <input type="text" class="form-control" v-model="outboundImportLink" placeholder="粘贴节点链接，如 vmess://... vless://... trojan://... socks5://...">
-                  <button class="btn btn-outline-primary" type="button" @click="parseOutboundImportLink">
-                    <i class="bi bi-box-arrow-in-down"></i> 解析
-                  </button>
+                  <input
+                    type="text"
+                    class="form-control"
+                    v-model="outboundImportLink"
+                    placeholder="粘贴节点链接：vless:// vmess:// trojan:// ss:// hysteria2:// tuic:// anytls:// socks5://"
+                    @keyup.enter="parseOutboundImportLink"
+                  >
+                  <button class="btn btn-outline-primary" type="button" @click="parseOutboundImportLink">识别</button>
+                </div>
+                <div class="form-text">
+                  支持标准链接与 base64 包裹变体（含 Reality 参数 pbk/sid/fp、ws 路径、ALPN）
                 </div>
               </div>
 
@@ -639,27 +646,6 @@
                     <input type="text" class="form-control" v-model="outboundData.short_id" placeholder="Short ID">
                   </div>
                 </div>
-                <!-- 传输层配置 -->
-                <div class="row">
-                  <div class="col-4 mb-3" v-if="outboundSupportsTransport">
-                    <label class="form-label">传输层</label>
-                    <select class="form-select" v-model="outboundData.network">
-                      <option value="">tcp (默认)</option>
-                      <option value="ws">WebSocket</option>
-                      <option value="grpc">gRPC</option>
-                      <option value="http">HTTP/2</option>
-                      <option value="httpupgrade">HTTPUpgrade</option>
-                    </select>
-                  </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
-                    <label class="form-label">WS Path</label>
-                    <input type="text" class="form-control" v-model="outboundData.ws_path" placeholder="/">
-                  </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
-                    <label class="form-label">WS Host</label>
-                    <input type="text" class="form-control" v-model="outboundData.ws_host" placeholder="可选">
-                  </div>
-                </div>
               </div>
 
               <!-- VMess 配置 -->
@@ -696,25 +682,39 @@
                     <input type="text" class="form-control" v-model="outboundData.sni" placeholder="TLS SNI">
                   </div>
                 </div>
-                <div class="row">
-                  <div class="col-4 mb-3" v-if="outboundSupportsTransport">
-                    <label class="form-label">传输层</label>
-                    <select class="form-select" v-model="outboundData.network">
-                      <option value="">tcp (默认)</option>
-                      <option value="ws">WebSocket</option>
-                      <option value="grpc">gRPC</option>
-                      <option value="http">HTTP/2</option>
-                      <option value="httpupgrade">HTTPUpgrade</option>
-                    </select>
-                  </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
-                    <label class="form-label">WS Path</label>
-                    <input type="text" class="form-control" v-model="outboundData.ws_path" placeholder="/">
-                  </div>
-                  <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
-                    <label class="form-label">WS Host</label>
-                    <input type="text" class="form-control" v-model="outboundData.ws_host" placeholder="可选">
-                  </div>
+              </div>
+
+
+              <!-- 传输层与 ALPN：VLESS / VMess / Trojan / AnyTLS 共用 -->
+              <div class="row" v-if="outboundSupportsTransport">
+                <div class="col-4 mb-3">
+                  <label class="form-label">传输层</label>
+                  <select class="form-select" v-model="outboundData.network">
+                    <option value="">tcp (默认)</option>
+                    <option value="ws">WebSocket</option>
+                    <option value="grpc">gRPC</option>
+                    <option value="http">HTTP/2</option>
+                    <option value="httpupgrade">HTTPUpgrade</option>
+                  </select>
+                </div>
+                <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
+                  <label class="form-label">WS Path</label>
+                  <input type="text" class="form-control" v-model="outboundData.ws_path" placeholder="/">
+                </div>
+                <div class="col-4 mb-3" v-if="outboundData.network === 'grpc'">
+                  <label class="form-label">gRPC 服务名</label>
+                  <input type="text" class="form-control" v-model="outboundData.ws_path" placeholder="服务名，留空用默认">
+                </div>
+                <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
+                  <label class="form-label">WS Host</label>
+                  <input type="text" class="form-control" v-model="outboundData.ws_host" placeholder="可选">
+                </div>
+                <div class="col-4 mb-3">
+                  <label class="form-label">
+                    ALPN
+                    <i class="bi bi-question-circle text-muted" title="TLS ALPN，逗号分隔。ws over TLS 常见 http/1.1；QUIC 系（TUIC/Hysteria2）固定 h3。留空由服务端协商。"></i>
+                  </label>
+                  <input type="text" class="form-control" v-model="outboundData.alpn" placeholder="http/1.1 或 h3,h2">
                 </div>
               </div>
 
@@ -1012,6 +1012,7 @@ function getDefaultOutboundData(): OutboundForm {
     network: '',
     ws_path: '',
     ws_host: '',
+    alpn: '',
     tuic_congestion: 'bbr',
     tuic_udp_relay_mode: 'native'
   }
@@ -1041,7 +1042,11 @@ const activeOutboundBranchHint = computed(() => {
 
 // Socks 不支持 TLS/Reality/传输层；只有 VLESS/VMess 有传输层
 const outboundSupportsTls = computed(() => !['socks', 'socks5'].includes(outboundData.value.protocol || ''))
-const outboundSupportsTransport = computed(() => ['vless', 'vmess'].includes(outboundData.value.protocol || ''))
+// 这几种协议都支持 ws / grpc / httpupgrade 传输层，
+// 之前只列了 vless/vmess，选 trojan 时传输层输入框整块消失，
+// 粘贴 ws 节点链接后解析出的参数在界面上既看不见也改不了。
+const outboundSupportsTransport = computed(() =>
+  ['vless', 'vmess', 'trojan', 'anytls'].includes(outboundData.value.protocol || ''))
 
 /** 把分支预设写入出站表单（不引入新字段，只按预设填既有字段） */
 function applyOutboundBranch(b: ProtocolBranch) {
@@ -1264,6 +1269,7 @@ function applyParsedToOutbound(p: ParsedProxy) {
   v.network = p.network
   v.ws_path = p.wsPath
   v.ws_host = p.wsHost
+  v.alpn = p.alpn
   if (!v.remark && p.name) {
     v.remark = p.name
   }
