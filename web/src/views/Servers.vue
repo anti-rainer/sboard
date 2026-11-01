@@ -569,7 +569,7 @@
               </div>
 
               <!-- Trojan/AnyTLS 配置 -->
-              <div class="row" v-if="outboundData.protocol === 'trojan' || outboundData.protocol === 'anytls'">
+              <div class="row" v-if="outboundData.protocol === 'trojan' || outboundData.protocol === 'anytls' || outboundData.protocol === 'naive'">
                 <div class="col-6 mb-3">
                   <label class="form-label">密码</label>
                   <input type="text" class="form-control" v-model="outboundData.password" placeholder="密码">
@@ -708,6 +708,16 @@
                 <div class="col-4 mb-3" v-if="outboundData.network === 'ws' || outboundData.network === 'httpupgrade'">
                   <label class="form-label">WS Host</label>
                   <input type="text" class="form-control" v-model="outboundData.ws_host" placeholder="可选">
+                </div>
+                <div class="col-4 mb-3 d-flex align-items-end">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="outboundSkipCert"
+                           v-model="outboundData.skip_cert_verify">
+                    <label class="form-check-label" for="outboundSkipCert">
+                      跳过证书校验
+                      <i class="bi bi-question-circle text-muted" title="对方是自签或伪装证书时需要开启；正规证书可关闭以提高安全性。"></i>
+                    </label>
+                  </div>
                 </div>
                 <div class="col-4 mb-3">
                   <label class="form-label">
@@ -1013,6 +1023,7 @@ function getDefaultOutboundData(): OutboundForm {
     ws_path: '',
     ws_host: '',
     alpn: '',
+    skip_cert_verify: true,
     tuic_congestion: 'bbr',
     tuic_udp_relay_mode: 'native'
   }
@@ -1270,6 +1281,7 @@ function applyParsedToOutbound(p: ParsedProxy) {
   v.ws_path = p.wsPath
   v.ws_host = p.wsHost
   v.alpn = p.alpn
+  v.skip_cert_verify = p.skipCertVerify
   if (!v.remark && p.name) {
     v.remark = p.name
   }

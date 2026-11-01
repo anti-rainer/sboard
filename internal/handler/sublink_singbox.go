@@ -728,7 +728,7 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		}
 		if node.RealityEnabled && node.RealityPubkey != "" {
 			if node.RealityServer != "" {
-				naiveTLS["server_name"] = node.RealityServer
+				naiveTLS["server_name"] = stripHostPort(node.RealityServer)
 			}
 			naiveTLS["utls"] = map[string]interface{}{
 				"enabled":     true,
@@ -752,7 +752,8 @@ func buildSingBoxTLS(node *database.InboundNode) map[string]interface{} {
 	}
 	if node.RealityEnabled && node.RealityPubkey != "" {
 		if node.RealityServer != "" {
-			tls["server_name"] = node.RealityServer
+			// RealityServer 形如 www.microsoft.com:443，server_name 只要主机名
+			tls["server_name"] = stripHostPort(node.RealityServer)
 		}
 		tls["reality"] = map[string]interface{}{
 			"enabled":    true,

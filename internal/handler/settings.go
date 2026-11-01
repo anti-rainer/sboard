@@ -24,8 +24,8 @@ var defaultSettings = map[string]string{
 
 	// Agent 自我更新源。由面板下发给 Agent，避免在 Agent 二进制中硬编码：
 	// 仓库转移或某个加速域名失效时改这里即可，无需重新编译 Agent。
-	"update_repo":      "anti-rainer/sboard",  // 仓库 owner/name
-	"update_proxy":     "https://ghfast.top/", // 首选加速前缀
+	"update_repo":      "anti-rainer/sboard",       // 仓库 owner/name
+	"update_proxy":     "https://ghfast.top/",      // 首选加速前缀
 	"update_fallbacks": "https://v6.gh-proxy.org/", // 逗号分隔的回退加速前缀
 
 	// 客户端分流配置里规则集的加速前缀。GitHub raw 国内直连很慢，

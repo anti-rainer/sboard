@@ -21,10 +21,11 @@ import (
 //
 // 这些 .list 都在 GitHub raw，国内直连不通，必须套加速前缀。
 // 实测各加速域名的可靠性（cn.list 2.8MB × 3 次）：
-//   gh-proxy.org / v6.gh-proxy.org / cdn.gh-proxy.org   全部成功、字节数精确
-//   ghfast.top        多次失败或返回截断内容
-//   ghproxy.net       返回截断内容（1MB 左右就断）
-//   cdn.jsdelivr.net  仓库分支超 50MB 时 403（Package size exceeded）
+//
+//	gh-proxy.org / v6.gh-proxy.org / cdn.gh-proxy.org   全部成功、字节数精确
+//	ghfast.top        多次失败或返回截断内容
+//	ghproxy.net       返回截断内容（1MB 左右就断）
+//	cdn.jsdelivr.net  仓库分支超 50MB 时 403（Package size exceeded）
 //
 // 所以默认用 gh-proxy.org。加速前缀可在面板设置 rule_set_proxy 里改，
 // 设为 none 表示直连。
@@ -60,8 +61,8 @@ func buildRuleSetURL(path string) string {
 
 // ruleSetSpec 规则集在各客户端里的路径。
 type ruleSetSpec struct {
-	LoonPath string
-	SRPath   string
+	LoonPath  string
+	SRPath    string
 	SurgePath string
 	// SurgeBuiltin 非空时直接用 Surge 内置规则集（如 LAN），不从仓库下载。
 	// 仓库里的 meta/ipcidr/*.list 是裸 CIDR，Surge 的规则集要求 IP-CIDR, 前缀，

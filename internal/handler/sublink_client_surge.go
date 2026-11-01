@@ -33,6 +33,12 @@ import (
 // surgeTLS 追加 TLS 相关字段。tlsFlag=false 用于 trojan / hysteria2 / tuic /
 // anytls 这类本身就跑在 TLS 上的协议——它们不接受也不需要在行内写 tls=true。
 func surgeTLS(kv *[]string, node *database.InboundNode, tlsFlag bool) {
+	surgeTLSWithVerify(kv, node, tlsFlag, true)
+}
+
+// surgeTLSWithVerify 同上，但可指定是否跳过证书校验。
+// 内置节点用伪装证书固定跳过；外部节点按用户配置。
+func surgeTLSWithVerify(kv *[]string, node *database.InboundNode, tlsFlag bool, skipVerify bool) {
 	if tlsFlag {
 		if !node.TlsEnabled {
 			return
@@ -42,8 +48,7 @@ func surgeTLS(kv *[]string, node *database.InboundNode, tlsFlag bool) {
 	if node.ServerName != "" {
 		*kv = append(*kv, "sni="+node.ServerName)
 	}
-	// 本项目使用伪装证书，客户端需跳过校验
-	*kv = append(*kv, "skip-cert-verify=true")
+	*kv = append(*kv, "skip-cert-verify="+boolStr(skipVerify))
 }
 
 // surgeWS 追加 ws 传输字段。返回 false 表示该传输方式 Surge 不支持。
@@ -182,7 +187,7 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 		if ext.ServerName != "" {
 			kv = append(kv, "sni="+ext.ServerName)
 		}
-		kv = append(kv, "skip-cert-verify=true")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "trojan":
 		head = fmt.Sprintf("trojan, %s, %d, password=%s", host, ext.Port, ext.UUID)
@@ -192,7 +197,7 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 		if ext.ServerName != "" {
 			kv = append(kv, "sni="+ext.ServerName)
 		}
-		kv = append(kv, "skip-cert-verify=true")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "hysteria2":
 		pwd := ext.Hy2Password
@@ -203,7 +208,7 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 		if ext.ServerName != "" {
 			kv = append(kv, "sni="+ext.ServerName)
 		}
-		kv = append(kv, "skip-cert-verify=true")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "tuic":
 		pwd := ext.TuicPassword
@@ -214,14 +219,14 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 		if ext.ServerName != "" {
 			kv = append(kv, "sni="+ext.ServerName)
 		}
-		kv = append(kv, "skip-cert-verify=true", "alpn=h3")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify), "alpn=h3")
 
 	case "anytls":
 		head = fmt.Sprintf("anytls, %s, %d, password=%s", host, ext.Port, ext.UUID)
 		if ext.ServerName != "" {
 			kv = append(kv, "sni="+ext.ServerName)
 		}
-		kv = append(kv, "skip-cert-verify=true")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "socks":
 		// 与 Shadowrocket 一致：用户名为 UUID，密码取 Password
@@ -240,7 +245,6 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 	}
 	return fmt.Sprintf("%s = %s", name, head)
 }
-
 
 // generateSurgeNodeList 生成供策略组 policy-path 引用的纯节点清单。
 //
@@ -367,7 +371,6 @@ func buildSurgeGroupsWithProvider(cfg *MihomoSubscriptionConfig, providerURL str
 	return out
 }
 
-
 // exactNameRegex 把一组节点名拼成「精确匹配」正则，例如
 //
 //	^(?:la-megabox|aws-jp)$
@@ -396,9 +399,10 @@ func exactNameRegex(names []string) string {
 // 用服务端算好的成员列表则正常包含。
 //
 // 所以这里取并集：
-//   A. 服务端按 GeoIP 算出的成员名，拼成精确正则——保证该进的一定进；
-//   B. 地区关键词正则——让以后新增的、名字带国家词的节点自动进组，
-//      不必等配置重新生成。
+//
+//	A. 服务端按 GeoIP 算出的成员名，拼成精确正则——保证该进的一定进；
+//	B. 地区关键词正则——让以后新增的、名字带国家词的节点自动进组，
+//	   不必等配置重新生成。
 //
 // filterMode=regex 的组（用户自己写的 HK/UK/CZ-VoWiFi）保持原样，
 // 用户明确要求那三个组用关键词正则。

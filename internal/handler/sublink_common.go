@@ -668,7 +668,8 @@ func buildMihomoTLSOpts(node *database.InboundNode, add func(string, interface{}
 	} else {
 		// vmess/vless 使用 servername 字段
 		if node.RealityEnabled && node.RealityServer != "" {
-			add("servername", node.RealityServer)
+			// RealityServer 形如 www.microsoft.com:443，servername 只要主机名
+			add("servername", stripHostPort(node.RealityServer))
 		} else if node.ServerName != "" {
 			add("servername", node.ServerName)
 		}

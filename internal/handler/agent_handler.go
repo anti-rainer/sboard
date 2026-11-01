@@ -987,9 +987,10 @@ func (s *Server) handleDeployAll(c *gin.Context) {
 }
 
 // 自我更新相关的默认值。可在系统设置里覆盖：
-//   update_repo      仓库（owner/name）
-//   update_proxy     首选加速前缀
-//   update_fallbacks 逗号分隔的回退加速前缀
+//
+//	update_repo      仓库（owner/name）
+//	update_proxy     首选加速前缀
+//	update_fallbacks 逗号分隔的回退加速前缀
 const (
 	defaultUpdateRepo  = "anti-rainer/sboard"
 	defaultUpdateProxy = "https://ghfast.top/"

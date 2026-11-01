@@ -408,6 +408,8 @@ export interface ServerOutbound {
   ws_host: string
   /** TLS ALPN，逗号分隔；留空由服务端协商 */
   alpn: string
+  /** 跳过 TLS 证书校验，默认 true */
+  skip_cert_verify: boolean
   created_at: string
   updated_at: string
 }
@@ -503,6 +505,7 @@ export interface ExternalNode {
   tls_enabled: boolean
   server_name: string
   alpn: string
+  skip_cert_verify: boolean
   reality_enabled: boolean
   reality_server: string
   reality_pubkey: string

@@ -24,16 +24,16 @@ import (
 
 func newSurgeTestNode(protocol string) *database.InboundNode {
 	n := &database.InboundNode{
-		Protocol:       protocol,
-		TlsEnabled:     true,
-		ServerName:     "down.dingtalk.com",
-		TransportType:  "tcp",
-		SsMethod:       "aes-256-gcm",
-		SsPassword:     "sspass",
-		Hy2Password:    "hy2pass",
-		Hy2Obfs:        "salamander",
+		Protocol:        protocol,
+		TlsEnabled:      true,
+		ServerName:      "down.dingtalk.com",
+		TransportType:   "tcp",
+		SsMethod:        "aes-256-gcm",
+		SsPassword:      "sspass",
+		Hy2Password:     "hy2pass",
+		Hy2Obfs:         "salamander",
 		Hy2ObfsPassword: "obfspass",
-		TuicPassword:   "tuicpass",
+		TuicPassword:    "tuicpass",
 	}
 	return n
 }
@@ -43,11 +43,11 @@ func TestBuildSurgeProxyLine(t *testing.T) {
 	uuid := "11111111-2222-3333-4444-555555555555"
 
 	tests := []struct {
-		name     string
-		protocol string
-		wantHead string   // 期望包含的片段
-		mustHave []string // 必须出现的字段
-		mustNot  []string // 不能出现的字段（客户端不接受）
+		name      string
+		protocol  string
+		wantHead  string   // 期望包含的片段
+		mustHave  []string // 必须出现的字段
+		mustNot   []string // 不能出现的字段（客户端不接受）
 		wantEmpty bool
 	}{
 		{
@@ -211,9 +211,10 @@ func TestClientConfIPv6HostWithoutBrackets(t *testing.T) {
 // VoWiFi 是 UDP 流量（IKE 500 / NAT-T 4500），策略必须能转发 UDP。
 //
 // Surge 各协议的 UDP 转发能力不同：
-//   Trojan / VMess / TUIC / Hysteria2 / AnyTLS  自动支持
-//   Shadowsocks / SOCKS5                        必须显式 udp-relay=true
-//   HTTP / HTTPS                                不支持
+//
+//	Trojan / VMess / TUIC / Hysteria2 / AnyTLS  自动支持
+//	Shadowsocks / SOCKS5                        必须显式 udp-relay=true
+//	HTTP / HTTPS                                不支持
 //
 // 漏掉 udp-relay 时这些 UDP 包会被 udp-policy-not-supported-behaviour
 // 处理（新版本默认 REJECT），Wi-Fi Calling 直接不通。

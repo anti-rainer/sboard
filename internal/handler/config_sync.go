@@ -815,7 +815,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		outbound["password"] = ob.Password
 		tls := map[string]interface{}{
 			"enabled":  true,
-			"insecure": true,
+			"insecure": ob.SkipCertVerify,
 		}
 		if ob.Sni != "" {
 			tls["server_name"] = ob.Sni
@@ -839,7 +839,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		outbound["password"] = ob.Password
 		tls := map[string]interface{}{
 			"enabled":  true,
-			"insecure": true,
+			"insecure": ob.SkipCertVerify,
 		}
 		if ob.Sni != "" {
 			tls["server_name"] = ob.Sni
@@ -884,7 +884,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		} else if ob.Tls {
 			tls := map[string]interface{}{
 				"enabled":  true,
-				"insecure": true,
+				"insecure": ob.SkipCertVerify,
 			}
 			if ob.Sni != "" {
 				tls["server_name"] = ob.Sni
@@ -915,7 +915,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		if ob.Tls {
 			tls := map[string]interface{}{
 				"enabled":  true,
-				"insecure": true,
+				"insecure": ob.SkipCertVerify,
 			}
 			if ob.Sni != "" {
 				tls["server_name"] = ob.Sni
@@ -940,7 +940,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		outbound["password"] = ob.Password
 		tls := map[string]interface{}{
 			"enabled":  true,
-			"insecure": true,
+			"insecure": ob.SkipCertVerify,
 		}
 		if ob.Sni != "" {
 			tls["server_name"] = ob.Sni
@@ -970,7 +970,7 @@ func buildOutboundFromServerOutbound(ob *database.ServerOutbound) map[string]int
 		outbound["udp_relay_mode"] = relay
 		tls := map[string]interface{}{
 			"enabled":  true,
-			"insecure": true,
+			"insecure": ob.SkipCertVerify,
 			"alpn":     []string{"h3"},
 		}
 		if ob.Sni != "" {

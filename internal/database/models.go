@@ -338,8 +338,8 @@ type InboundNode struct {
 	Flow string `gorm:"size:50" json:"flow"`
 
 	// Shadowsocks 配置
-	SsMethod   string `gorm:"size:50" json:"ss_method"`     // aes-256-gcm/chacha20-ietf-poly1305/2022-blake3-aes-256-gcm
-	SsPassword string `gorm:"size:100" json:"ss_password"`  // 随机生成的密码
+	SsMethod   string `gorm:"size:50" json:"ss_method"`    // aes-256-gcm/chacha20-ietf-poly1305/2022-blake3-aes-256-gcm
+	SsPassword string `gorm:"size:100" json:"ss_password"` // 随机生成的密码
 
 	// Hysteria2 配置
 	Hy2Password     string `gorm:"size:100" json:"hy2_password"`
@@ -349,9 +349,9 @@ type InboundNode struct {
 	Hy2ObfsPassword string `gorm:"size:100" json:"hy2_obfs_password"`
 
 	// TUIC 配置（QUIC 系，强制 TLS）
-	TuicPassword    string `gorm:"size:100" json:"tuic_password"`
-	TuicCongestion  string `gorm:"size:20;default:bbr" json:"tuic_congestion"` // bbr/cubic/new_reno
-	TuicZeroRtt     bool   `gorm:"default:false" json:"tuic_zero_rtt"`
+	TuicPassword   string `gorm:"size:100" json:"tuic_password"`
+	TuicCongestion string `gorm:"size:20;default:bbr" json:"tuic_congestion"` // bbr/cubic/new_reno
+	TuicZeroRtt    bool   `gorm:"default:false" json:"tuic_zero_rtt"`
 
 	// 状态
 	Enabled bool   `gorm:"default:true" json:"enabled"`
@@ -375,6 +375,8 @@ type ExternalNode struct {
 	TlsEnabled bool   `json:"tls_enabled"`
 	ServerName string `gorm:"size:100" json:"server_name"`
 	Alpn       string `gorm:"size:100" json:"alpn"`
+	// SkipCertVerify 跳过 TLS 证书校验，默认 true（兼容自签/伪装证书）
+	SkipCertVerify bool `gorm:"default:true" json:"skip_cert_verify"`
 
 	// Reality
 	RealityEnabled bool   `json:"reality_enabled"`
@@ -405,7 +407,7 @@ type ExternalNode struct {
 
 	// TUIC（QUIC 系，强制 TLS；udp_relay_mode 仅出站使用）
 	TuicPassword     string `gorm:"size:100" json:"tuic_password"`
-	TuicCongestion   string `gorm:"size:20" json:"tuic_congestion"`    // bbr/cubic/new_reno
+	TuicCongestion   string `gorm:"size:20" json:"tuic_congestion"`     // bbr/cubic/new_reno
 	TuicUdpRelayMode string `gorm:"size:20" json:"tuic_udp_relay_mode"` // native/quic
 
 	// Socks 密码（用户名复用 UUID 字段）
@@ -607,7 +609,7 @@ type ServerOutbound struct {
 	ObfsPwd string `gorm:"size:200" json:"obfs_pwd"` // Hysteria2 obfs 密码
 
 	// TUIC 配置（Password 字段复用通用 Password）
-	TuicCongestion   string `gorm:"size:20" json:"tuic_congestion"`    // bbr/cubic/new_reno
+	TuicCongestion   string `gorm:"size:20" json:"tuic_congestion"`     // bbr/cubic/new_reno
 	TuicUdpRelayMode string `gorm:"size:20" json:"tuic_udp_relay_mode"` // native/quic
 
 	// 传输层配置 (VMess/VLESS)
@@ -617,6 +619,9 @@ type ServerOutbound struct {
 	// Alpn TLS ALPN 列表，逗号分隔。QUIC 系固定 h3；
 	// ws over TLS 常见 http/1.1，不写时由服务端协商。
 	Alpn string `gorm:"size:100" json:"alpn"`
+	// SkipCertVerify 跳过 TLS 证书校验。落地节点常用自签/伪装证书，
+	// 默认 true 保持既有行为；对方是正规证书时可关掉以提高安全性。
+	SkipCertVerify bool `gorm:"default:true" json:"skip_cert_verify"`
 
 	// Country 落地节点的实际出口国家（ISO 3166-1 alpha-2，如 CZ）。
 	// 落地出站的 Host 是【入口】地址，与真实出口位置常常不在同一国家

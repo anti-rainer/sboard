@@ -144,7 +144,6 @@ func getNodeEffectiveIP(server *database.Server, _ *database.InboundNode, nc *da
 	return server.Host
 }
 
-
 // isDomesticByIP 通过 GeoIP 判断 IP 是否为国内
 func isDomesticByIP(ipOrHost string) bool {
 	// 如果 GeoIP 数据库未加载，回退到节点名判断
@@ -218,4 +217,30 @@ func getCountryCode(ipOrHost string) string {
 	}
 
 	return geoip.LookupCountry(ipOrHost)
+}
+
+// stripHostPort 去掉 "host:port" 里的端口。
+//
+// RealityServer 存的是伪装目标，形如 www.microsoft.com:443；而 SNI /
+// server_name 字段只接受主机名，带着 ":443" 会让客户端握手失败。
+// 兼容 [v6]:port 与纯 IPv6 两种写法。
+func stripHostPort(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	if strings.HasPrefix(v, "[") {
+		if i := strings.LastIndex(v, "]"); i > 0 {
+			return v[1:i]
+		}
+		return v
+	}
+	// 纯 IPv6（多个冒号且无方括号）原样返回
+	if strings.Count(v, ":") > 1 {
+		return v
+	}
+	if i := strings.LastIndex(v, ":"); i > 0 {
+		return v[:i]
+	}
+	return v
 }

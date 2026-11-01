@@ -15,6 +15,16 @@ import (
 const MaxOutboundSlots = 10 // 最大落地出站槽位数
 
 // OutboundRequest 落地出站请求
+// skipCertOrTrue 处理「跳过证书校验」的三态入参：
+// 未传（nil）时用默认值 true，保留既有的自签/伪装证书行为；
+// 显式传 false 才真正开启证书校验。
+func skipCertOrTrue(v *bool) bool {
+	if v == nil {
+		return true
+	}
+	return *v
+}
+
 type OutboundRequest struct {
 	Enabled bool   `json:"enabled"`
 	Remark  string `json:"remark"` // 备注（显示为按钮名称）
@@ -52,10 +62,11 @@ type OutboundRequest struct {
 	Country string `json:"country"`
 
 	// 传输层配置 (VMess/VLESS)
-	Network string `json:"network"`
-	WsPath  string `json:"ws_path"`
-	WsHost  string `json:"ws_host"`
-	Alpn    string `json:"alpn"`
+	Network        string `json:"network"`
+	WsPath         string `json:"ws_path"`
+	WsHost         string `json:"ws_host"`
+	Alpn           string `json:"alpn"`
+	SkipCertVerify *bool  `json:"skip_cert_verify"`
 }
 
 func validateOutboundRequest(req *OutboundRequest) error {
@@ -186,40 +197,47 @@ func (s *Server) handleCreateServerOutbound(c *gin.Context) {
 
 	// 创建新的落地出站
 	outbound := database.ServerOutbound{
-		ServerID: uint(serverID),
-		Slot:     newSlot,
-		Enabled:  req.Enabled,
-		Remark:   req.Remark,
-		Protocol: req.Protocol,
-		Host:     req.Host,
-		Port:     req.Port,
-		Password: req.Password,
-		Method:   req.Method,
-		Username: req.Username,
-		Sni:      req.Sni,
-		UUID:     req.UUID,
-		Flow:     req.Flow,
-		Security: req.Security,
-		AlterId:  req.AlterId,
-		Tls:      req.Tls,
-		Reality:  req.Reality,
-		PubKey:   req.PubKey,
-		ShortId:  req.ShortId,
-		Fp:       req.Fp,
+		ServerID:         uint(serverID),
+		Slot:             newSlot,
+		Enabled:          req.Enabled,
+		Remark:           req.Remark,
+		Protocol:         req.Protocol,
+		Host:             req.Host,
+		Port:             req.Port,
+		Password:         req.Password,
+		Method:           req.Method,
+		Username:         req.Username,
+		Sni:              req.Sni,
+		UUID:             req.UUID,
+		Flow:             req.Flow,
+		Security:         req.Security,
+		AlterId:          req.AlterId,
+		Tls:              req.Tls,
+		Reality:          req.Reality,
+		PubKey:           req.PubKey,
+		ShortId:          req.ShortId,
+		Fp:               req.Fp,
 		Obfs:             req.Obfs,
 		ObfsPwd:          req.ObfsPwd,
 		TuicCongestion:   req.TuicCongestion,
 		TuicUdpRelayMode: req.TuicUdpRelayMode,
 		Country:          strings.ToUpper(strings.TrimSpace(req.Country)),
 		Network:          req.Network,
-		WsPath:   req.WsPath,
-		WsHost:   req.WsHost,
-		Alpn:     strings.TrimSpace(req.Alpn),
+		WsPath:           req.WsPath,
+		WsHost:           req.WsHost,
+		Alpn:             strings.TrimSpace(req.Alpn),
+		SkipCertVerify:   skipCertOrTrue(req.SkipCertVerify),
 	}
+
+	wantSkipCert := outbound.SkipCertVerify
 
 	if err := database.GetDB().Create(&outbound).Error; err != nil {
 		errorJSON(c, http.StatusInternalServerError, "创建失败")
 		return
+	}
+	if !wantSkipCert {
+		database.GetDB().Model(&outbound).Update("skip_cert_verify", false)
+		outbound.SkipCertVerify = false
 	}
 
 	// 广播配置更新到该服务器的 Agent
@@ -286,6 +304,7 @@ func (s *Server) handleUpdateServerOutbound(c *gin.Context) {
 	outbound.WsPath = req.WsPath
 	outbound.WsHost = req.WsHost
 	outbound.Alpn = strings.TrimSpace(req.Alpn)
+	outbound.SkipCertVerify = skipCertOrTrue(req.SkipCertVerify)
 
 	if err := database.GetDB().Save(&outbound).Error; err != nil {
 		errorJSON(c, http.StatusInternalServerError, "更新失败")

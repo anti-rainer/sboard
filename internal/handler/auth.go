@@ -188,4 +188,3 @@ func (s *Server) handleGetCurrentUser(c *gin.Context) {
 		"username": username,
 	})
 }
-

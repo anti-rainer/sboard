@@ -14,6 +14,11 @@ import (
 func buildShadowrocketProxyLine(name, host string, port int, node *database.InboundNode, user *database.ProxyUser, uuid string) string {
 	tls := node.TlsEnabled || node.RealityEnabled
 	sni := node.ServerName
+	// Reality 的 SNI 必须是伪装目标站点，而不是本项目的 ServerName。
+	// RealityServer 存的是 www.microsoft.com:443，SNI 只取主机名。
+	if node.RealityEnabled && node.RealityServer != "" {
+		sni = stripHostPort(node.RealityServer)
+	}
 	var kv []string
 
 	// TLS 相关通用字段
@@ -161,6 +166,9 @@ func buildShadowrocketProxyLine(name, host string, port int, node *database.Inbo
 func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.ExternalNode) string {
 	tls := ext.TlsEnabled || ext.RealityEnabled
 	sni := ext.ServerName
+	if ext.RealityEnabled && ext.RealityServer != "" {
+		sni = stripHostPort(ext.RealityServer)
+	}
 	var kv []string
 
 	addTLS := func() {
@@ -169,7 +177,7 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 			if sni != "" {
 				kv = append(kv, "peer="+sni)
 			}
-			kv = append(kv, "skip-cert-verify=true")
+			kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 		}
 	}
 	addTransport := func() {
@@ -230,7 +238,7 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 		if sni != "" {
 			kv = append(kv, "peer="+sni)
 		}
-		kv = append(kv, "skip-cert-verify=true")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "hysteria2":
 		pwd := ext.Hy2Password
@@ -241,7 +249,7 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 		if sni != "" {
 			kv = append(kv, "peer="+sni)
 		}
-		kv = append(kv, "skip-cert-verify=true", "udp=1")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify), "udp=1")
 		if ext.Hy2Obfs != "" && ext.Hy2ObfsPassword != "" {
 			kv = append(kv, "obfs=salamander", "obfs-password="+ext.Hy2ObfsPassword)
 		}
@@ -259,7 +267,7 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 		if sni != "" {
 			kv = append(kv, "peer="+sni)
 		}
-		kv = append(kv, "skip-cert-verify=true", "udp=1", "congestion-controller="+congestion, "udp-relay-mode=native", "alpn=h3")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify), "udp=1", "congestion-controller="+congestion, "udp-relay-mode=native", "alpn=h3")
 
 	case "anytls":
 		pwd := ext.Password
@@ -270,7 +278,7 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 		if sni != "" {
 			kv = append(kv, "peer="+sni)
 		}
-		kv = append(kv, "skip-cert-verify=true")
+		kv = append(kv, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "socks":
 		uname := ext.UUID
@@ -290,6 +298,10 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 func buildLoonProxyLine(name, host string, port int, node *database.InboundNode, user *database.ProxyUser, uuid string) string {
 	tls := node.TlsEnabled || node.RealityEnabled
 	sni := node.ServerName
+	// Reality 用伪装目标站点的 SNI，与其它客户端保持一致
+	if node.RealityEnabled && node.RealityServer != "" {
+		sni = stripHostPort(node.RealityServer)
+	}
 
 	addTransport := func() []string {
 		if !node.TransportEnabled || node.TransportType == "" || node.TransportType == "tcp" {
@@ -464,7 +476,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 		parts = append(parts, addTransport()...)
 		parts = append(parts, "over-tls="+boolStr(tls))
 		if tls && sni != "" {
-			parts = append(parts, "tls-name="+sni, "skip-cert-verify=true")
+			parts = append(parts, "tls-name="+sni, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 		}
 
 	case "vless":
@@ -476,7 +488,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 		if sni != "" {
 			parts = append(parts, "tls-name="+sni)
 		}
-		parts = append(parts, "skip-cert-verify=true")
+		parts = append(parts, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "trojan":
 		pwd := ext.Password
@@ -488,7 +500,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 		if sni != "" {
 			parts = append(parts, "tls-name="+sni)
 		}
-		parts = append(parts, "skip-cert-verify=true", "udp=true")
+		parts = append(parts, "skip-cert-verify="+boolStr(ext.SkipCertVerify), "udp=true")
 
 	case "hysteria2":
 		pwd := ext.Hy2Password
@@ -499,7 +511,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 		if sni != "" {
 			parts = append(parts, "sni="+sni)
 		}
-		parts = append(parts, "skip-cert-verify=true")
+		parts = append(parts, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 		if ext.Hy2Obfs != "" && ext.Hy2ObfsPassword != "" {
 			parts = append(parts, "obfs=salamander", "obfs-password="+loonQuote(ext.Hy2ObfsPassword))
 		}
@@ -517,7 +529,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 		if sni != "" {
 			parts = append(parts, "sni="+sni)
 		}
-		parts = append(parts, "skip-cert-verify=true", "congestion-control="+congestion, "udp-relay-mode=native")
+		parts = append(parts, "skip-cert-verify="+boolStr(ext.SkipCertVerify), "congestion-control="+congestion, "udp-relay-mode=native")
 
 	case "anytls":
 		pwd := ext.Password
@@ -528,7 +540,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 		if sni != "" {
 			parts = append(parts, "sni="+sni)
 		}
-		parts = append(parts, "skip-cert-verify=true")
+		parts = append(parts, "skip-cert-verify="+boolStr(ext.SkipCertVerify))
 
 	case "socks":
 		parts = []string{"Socks5", host, fmt.Sprint(ext.Port), ext.UUID, loonQuote(ext.Password)}

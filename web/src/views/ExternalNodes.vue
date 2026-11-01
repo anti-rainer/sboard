@@ -159,6 +159,16 @@
                       <input type="text" class="form-control" v-model="form.alpn" placeholder="h2,http/1.1">
                     </div>
                   </div>
+                <div class="col-md-4 mb-3 d-flex align-items-end">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="extSkipCert"
+                           v-model="form.skip_cert_verify">
+                    <label class="form-check-label" for="extSkipCert">
+                      跳过证书校验
+                      <i class="bi bi-question-circle text-muted" title="对方是自签或伪装证书时需要开启；正规证书可关闭以提高安全性。"></i>
+                    </label>
+                  </div>
+                </div>
                   <div class="form-check form-switch mb-2" v-if="form.protocol === 'vless'">
                     <input class="form-check-input" type="checkbox" v-model="form.reality_enabled" id="extReality">
                     <label class="form-check-label" for="extReality">REALITY</label>
@@ -436,6 +446,7 @@ const defaultForm = (): ExternalNodeForm => ({
   tls_enabled: false,
   server_name: '',
   alpn: '',
+  skip_cert_verify: true,
   reality_enabled: false,
   reality_pubkey: '',
   reality_short_id: '',
@@ -617,6 +628,7 @@ const applyParsedToForm = (p: ParsedProxy) => {
   v.tls_enabled = p.tls
   v.server_name = p.sni
   v.alpn = p.alpn
+  v.skip_cert_verify = p.skipCertVerify
   v.reality_enabled = p.reality
   v.reality_pubkey = p.pubKey
   v.reality_short_id = p.shortId

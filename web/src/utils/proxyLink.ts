@@ -52,6 +52,7 @@ export interface ParsedProxy {
   grpcService: string
 
   // Hysteria2
+  skipCertVerify: boolean // 跳过 TLS 证书校验（链接里的 allowInsecure / insecure / skip-cert-verify）
   obfs: string
   obfsPassword: string
   upMbps: number
@@ -75,6 +76,7 @@ const EMPTY: ParsedProxy = {
   pubKey: '',
   shortId: '',
   flow: '',
+  skipCertVerify: true, // 默认跳过：与本项目内置伪装证书的行为保持一致
   network: '',
   wsPath: '',
   wsHost: '',
@@ -86,7 +88,30 @@ const EMPTY: ParsedProxy = {
 }
 
 /** 宽松 base64 解码：自动补齐 padding，兼容 URL-safe 与标准字母表 */
-export function decodeBase64Flexible(input: string): string {
+export /**
+ * 从链接参数里读「跳过证书校验」。
+ * 各客户端写法不同：allowInsecure / insecure / skip-cert-verify / allow_insecure。
+ */
+function readSkipCertUrl(params: URLSearchParams): boolean {
+  for (const key of ['allowInsecure', 'allow_insecure', 'insecure', 'skip-cert-verify', 'skipCertVerify']) {
+    const v = params.get(key)
+    if (v === null) continue
+    return !(v === '0' || v === 'false' || v === '')
+  }
+  return true // 缺省跳过，与本项目内置伪装证书一致
+}
+
+/** 同上，作用于 vmess 的 JSON 字段 */
+function readSkipCert(cfg: any): boolean {
+  for (const key of ['allowInsecure', 'insecure', 'skip-cert-verify', 'allow_insecure']) {
+    if (cfg[key] === undefined || cfg[key] === null) continue
+    const v = cfg[key]
+    return !(v === false || v === 0 || v === '0' || v === 'false' || v === '')
+  }
+  return true
+}
+
+function decodeBase64Flexible(input: string): string {
   let s = input.trim().replace(/-/g, '+').replace(/_/g, '/')
   // 去掉可能存在的空白
   s = s.replace(/\s+/g, '')
@@ -187,6 +212,9 @@ function applyParams(out: ParsedProxy, params: URLSearchParams) {
   out.wsHost = pick(params, 'host')
   out.grpcService = pick(params, 'serviceName', 'service_name')
 
+  // 跳过证书校验：allowInsecure=1 / insecure=1 / skip-cert-verify=true 都算
+  out.skipCertVerify = readSkipCertUrl(params)
+
   // hysteria2
   const obfs = pick(params, 'obfs')
   if (obfs) {
@@ -218,6 +246,12 @@ function parseVmess(link: string): ParsedProxy {
 
   const net = (cfg.net || 'tcp').toLowerCase()
   if (net && net !== 'tcp') out.network = net
+  // v2rayN 规范里 net 是传输层、type 是伪装头。HTTP 伪装写成
+  // net=tcp + type=http，只看 net 会把这种节点误判成裸 TCP。
+  const obfsType = (cfg.type || '').toLowerCase()
+  if ((!out.network || out.network === 'tcp') && obfsType === 'http') {
+    out.network = 'http'
+  }
   out.wsPath = cfg.path || ''
   out.wsHost = cfg.host || ''
   if (net === 'grpc') out.grpcService = cfg.path || ''
@@ -233,6 +267,9 @@ function parseVmess(link: string): ParsedProxy {
       out.pubKey = cfg.pbk || ''
       out.shortId = cfg.sid || ''
     }
+  }
+  if (cfg.allowInsecure !== undefined || cfg.insecure !== undefined || cfg.verify_cert !== undefined) {
+    out.skipCertVerify = readSkipCert(cfg)
   }
   if (cfg.flow) out.flow = cfg.flow
 
@@ -320,6 +357,9 @@ export function parseProxyLink(rawLink: string): ParsedProxy {
   if (lower.startsWith('ss://')) return parseShadowsocks(link)
 
   const schemes: Array<[string, ProxyProtocol]> = [
+    ['naive+https://', 'naive'],
+    ['naive+quic://', 'naive'],
+    ['naive://', 'naive'],
     ['vless://', 'vless'],
     ['trojan://', 'trojan'],
     ['hysteria2://', 'hysteria2'],

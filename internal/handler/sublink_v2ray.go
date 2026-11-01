@@ -100,7 +100,7 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 				} else if node.TransportType == "grpc" && node.GrpcService != "" {
 					vmessConfig["path"] = node.GrpcService
 					vmessConfig["type"] = "gun"
-				} else if node.TransportType == "h2" {
+				} else if node.TransportType == "h2" || node.TransportType == "httpupgrade" {
 					if node.WsPath != "" {
 						vmessConfig["path"] = node.WsPath
 					}
@@ -138,6 +138,15 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 				}
 			} else if node.TransportType == "grpc" && node.GrpcService != "" {
 				params.Set("serviceName", node.GrpcService)
+			} else if node.TransportType == "h2" || node.TransportType == "httpupgrade" {
+				// h2 / httpupgrade 同样需要 path 与 host，之前只给了 ws，
+				// 快速识别黏回来会丢这两项
+				if node.WsPath != "" {
+					params.Set("path", node.WsPath)
+				}
+				if node.TransportHost != "" {
+					params.Set("host", node.TransportHost)
+				}
 			}
 		} else {
 			params.Set("type", "tcp")
@@ -148,7 +157,8 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 			params.Set("pbk", node.RealityPubkey)
 			params.Set("sid", node.RealityShortId)
 			if node.RealityServer != "" {
-				params.Set("sni", node.RealityServer)
+				// RealityServer 形如 www.microsoft.com:443，SNI 只取主机名
+				params.Set("sni", stripHostPort(node.RealityServer))
 			}
 			params.Set("fp", "chrome")
 		} else if node.TlsEnabled {
@@ -180,6 +190,13 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 			} else if node.TransportType == "grpc" && node.GrpcService != "" {
 				params.Set("serviceName", node.GrpcService)
 				params.Set("mode", "gun")
+			} else if node.TransportType == "h2" || node.TransportType == "httpupgrade" {
+				if node.WsPath != "" {
+					params.Set("path", node.WsPath)
+				}
+				if node.TransportHost != "" {
+					params.Set("host", node.TransportHost)
+				}
 			}
 		}
 		if node.ServerName != "" {
@@ -295,7 +312,7 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 				} else if ext.TransportType == "grpc" && ext.GrpcService != "" {
 					vmessConfig["path"] = ext.GrpcService
 					vmessConfig["type"] = "gun"
-				} else if ext.TransportType == "h2" {
+				} else if ext.TransportType == "h2" || ext.TransportType == "httpupgrade" {
 					if ext.WsPath != "" {
 						vmessConfig["path"] = ext.WsPath
 					}
@@ -331,6 +348,13 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 				}
 			} else if ext.TransportType == "grpc" && ext.GrpcService != "" {
 				params.Set("serviceName", ext.GrpcService)
+			} else if ext.TransportType == "h2" || ext.TransportType == "httpupgrade" {
+				if ext.WsPath != "" {
+					params.Set("path", ext.WsPath)
+				}
+				if ext.TransportHost != "" {
+					params.Set("host", ext.TransportHost)
+				}
 			}
 		} else {
 			params.Set("type", "tcp")
@@ -340,7 +364,7 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 			params.Set("pbk", ext.RealityPubkey)
 			params.Set("sid", ext.RealityShortId)
 			if ext.RealityServer != "" {
-				params.Set("sni", ext.RealityServer)
+				params.Set("sni", stripHostPort(ext.RealityServer))
 			}
 			params.Set("fp", "chrome")
 		} else if ext.TlsEnabled {
@@ -348,7 +372,9 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 			if ext.ServerName != "" {
 				params.Set("sni", ext.ServerName)
 			}
-			params.Set("allowInsecure", "1")
+			if ext.SkipCertVerify {
+				params.Set("allowInsecure", "1")
+			}
 			params.Set("fp", "chrome")
 		} else {
 			params.Set("security", "none")
@@ -372,6 +398,13 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 			} else if ext.TransportType == "grpc" && ext.GrpcService != "" {
 				params.Set("serviceName", ext.GrpcService)
 				params.Set("mode", "gun")
+			} else if ext.TransportType == "h2" || ext.TransportType == "httpupgrade" {
+				if ext.WsPath != "" {
+					params.Set("path", ext.WsPath)
+				}
+				if ext.TransportHost != "" {
+					params.Set("host", ext.TransportHost)
+				}
 			}
 		}
 		if ext.ServerName != "" {
@@ -379,7 +412,9 @@ func buildV2RayLinkFromExternal(ext *database.ExternalNode) string {
 		} else {
 			params.Set("sni", ext.Host)
 		}
-		params.Set("allowInsecure", "1")
+		if ext.SkipCertVerify {
+			params.Set("allowInsecure", "1")
+		}
 		params.Set("fp", "chrome")
 		return fmt.Sprintf("trojan://%s@%s:%d?%s#%s", ext.UUID, formatHostForURL(ext.Host), ext.Port, params.Encode(), url.PathEscape(ext.Name))
 

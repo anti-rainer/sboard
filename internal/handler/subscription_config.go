@@ -199,15 +199,15 @@ type SingBoxNTPConfig struct {
 
 // SingBoxDNSConfig SingBox DNS 配置（1.14）
 type SingBoxDNSConfig struct {
-	Servers       []SingBoxDNSServer `json:"servers"`
-	Rules         []SingBoxDNSRule   `json:"rules"`
-	Strategy      string             `json:"strategy"`
-	Final         string             `json:"final"`
-	ClientSubnet  string             `json:"clientSubnet"`
-	Optimistic    bool               `json:"optimistic"`
-	ReverseMapping bool              `json:"reverseMapping"`
-	DisableCache  bool               `json:"disableCache"`
-	CacheCapacity int                `json:"cacheCapacity"`
+	Servers        []SingBoxDNSServer `json:"servers"`
+	Rules          []SingBoxDNSRule   `json:"rules"`
+	Strategy       string             `json:"strategy"`
+	Final          string             `json:"final"`
+	ClientSubnet   string             `json:"clientSubnet"`
+	Optimistic     bool               `json:"optimistic"`
+	ReverseMapping bool               `json:"reverseMapping"`
+	DisableCache   bool               `json:"disableCache"`
+	CacheCapacity  int                `json:"cacheCapacity"`
 }
 
 // SingBoxDNSServer SingBox DNS 服务器（支持 hosts/udp/quic/https/fakeip/group）
@@ -236,15 +236,15 @@ type SingBoxDNSRule struct {
 
 // SingBoxInboundConfig SingBox 入站配置
 type SingBoxInboundConfig struct {
-	TunEnable      bool   `json:"tunEnable"`
-	InterfaceName  string `json:"interfaceName"`
-	Stack          string `json:"stack"`
-	MTU            int    `json:"mtu"`
-	AddressIPv4    string `json:"addressIpv4"`
-	AddressIPv6    string `json:"addressIpv6"`
-	AutoRoute      bool   `json:"autoRoute"`
-	AutoRedirect   bool   `json:"autoRedirect"`
-	StrictRoute    bool   `json:"strictRoute"`
+	TunEnable     bool   `json:"tunEnable"`
+	InterfaceName string `json:"interfaceName"`
+	Stack         string `json:"stack"`
+	MTU           int    `json:"mtu"`
+	AddressIPv4   string `json:"addressIpv4"`
+	AddressIPv6   string `json:"addressIpv6"`
+	AutoRoute     bool   `json:"autoRoute"`
+	AutoRedirect  bool   `json:"autoRedirect"`
+	StrictRoute   bool   `json:"strictRoute"`
 }
 
 // SingBoxOutboundGroup SingBox 策略组（支持 selector 类型）
@@ -272,13 +272,13 @@ type SingBoxRouteConfig struct {
 
 // SingBoxRouteRule SingBox 路由规则（支持 1.14 action）
 type SingBoxRouteRule struct {
-	Type      string           `json:"type"`
-	Value     string           `json:"value"`
-	Values    []string         `json:"values"`
-	Action    string           `json:"action"`
-	Outbound  string           `json:"outbound"`
-	Mode      string           `json:"mode"`
-	SubRules  []SingBoxSubRule `json:"subRules"`
+	Type     string           `json:"type"`
+	Value    string           `json:"value"`
+	Values   []string         `json:"values"`
+	Action   string           `json:"action"`
+	Outbound string           `json:"outbound"`
+	Mode     string           `json:"mode"`
+	SubRules []SingBoxSubRule `json:"subRules"`
 }
 
 // SingBoxSubRule SingBox 子规则
@@ -298,24 +298,24 @@ type SingBoxRuleSet struct {
 
 // SingBoxExperimentalConfig SingBox 实验性配置（1.14）
 type SingBoxExperimentalConfig struct {
-	CacheFileEnabled           bool   `json:"cacheFileEnabled"`
-	StoreFakeip                bool   `json:"storeFakeip"`
-	StoreDns                   bool   `json:"storeDns"`
-	ExternalController         string `json:"externalController"`
-	ExternalUi                 string `json:"externalUi"`
-	ExternalUiDownloadUrl      string `json:"externalUiDownloadUrl"`
-	ExternalUiDownloadDetour   string `json:"externalUiDownloadDetour"`
-	DefaultMode                string `json:"defaultMode"`
+	CacheFileEnabled         bool   `json:"cacheFileEnabled"`
+	StoreFakeip              bool   `json:"storeFakeip"`
+	StoreDns                 bool   `json:"storeDns"`
+	ExternalController       string `json:"externalController"`
+	ExternalUi               string `json:"externalUi"`
+	ExternalUiDownloadUrl    string `json:"externalUiDownloadUrl"`
+	ExternalUiDownloadDetour string `json:"externalUiDownloadDetour"`
+	DefaultMode              string `json:"defaultMode"`
 }
 
 // SingBoxHttpClient HTTP 客户端配置（1.14 完整）
 type SingBoxHttpClient struct {
-	Tag                  string            `json:"tag"`
-	Version              int               `json:"version"`
-	Headers              map[string]string `json:"headers"`
-	Detour               string            `json:"detour"`
-	StreamReceiveWindow  int               `json:"streamReceiveWindow"`
-	ConnectionReceiveWindow int            `json:"connectionReceiveWindow"`
+	Tag                     string            `json:"tag"`
+	Version                 int               `json:"version"`
+	Headers                 map[string]string `json:"headers"`
+	Detour                  string            `json:"detour"`
+	StreamReceiveWindow     int               `json:"streamReceiveWindow"`
+	ConnectionReceiveWindow int               `json:"connectionReceiveWindow"`
 }
 
 // SingBoxServiceConfig 服务配置
@@ -327,11 +327,11 @@ type SingBoxServiceConfig struct {
 
 // SingBoxProviderConfig 代理提供商配置（remote 类型）
 type SingBoxProviderConfig struct {
-	Type          string `json:"type"`
-	Tag           string `json:"tag"`
-	URL           string `json:"url"`
-	Path          string `json:"path"`
-	HttpClient    string `json:"httpClient"`
+	Type           string `json:"type"`
+	Tag            string `json:"tag"`
+	URL            string `json:"url"`
+	Path           string `json:"path"`
+	HttpClient     string `json:"httpClient"`
 	UpdateInterval string `json:"updateInterval"`
 }
 
@@ -355,29 +355,29 @@ type MihomoProfileConfig struct {
 
 // MihomoConfigTemplate Mihomo 配置模板
 type MihomoConfigTemplate struct {
-	Mode                    string `json:"mode"`
-	BindAddress             string `json:"bindAddress"`
-	MixedPort               int    `json:"mixedPort"`
-	RedirPort               int    `json:"redirPort"`
-	TproxyPort              int    `json:"tproxyPort"`
-	LogLevel                string `json:"logLevel"`
-	Ipv6                    bool   `json:"ipv6"`
-	AllowLan                bool   `json:"allowLan"`
-	UnifiedDelay            bool   `json:"unifiedDelay"`
-	TcpConcurrent           bool   `json:"tcpConcurrent"`
-	FindProcessMode         string `json:"findProcessMode"`
+	Mode            string `json:"mode"`
+	BindAddress     string `json:"bindAddress"`
+	MixedPort       int    `json:"mixedPort"`
+	RedirPort       int    `json:"redirPort"`
+	TproxyPort      int    `json:"tproxyPort"`
+	LogLevel        string `json:"logLevel"`
+	Ipv6            bool   `json:"ipv6"`
+	AllowLan        bool   `json:"allowLan"`
+	UnifiedDelay    bool   `json:"unifiedDelay"`
+	TcpConcurrent   bool   `json:"tcpConcurrent"`
+	FindProcessMode string `json:"findProcessMode"`
 	// GlobalClientFingerprint 已废弃：mihomo 1.19+ 移除该配置项，
 	// 改为在每个 proxy 上单独设置 client-fingerprint。
-	ExternalController      string `json:"externalController"`
-	ExternalUi              string `json:"externalUi"`
-	ExternalUiUrl           string `json:"externalUiUrl"`
-	Profile MihomoProfileConfig `json:"profile"`
-	Sniffer MihomoSnifferConfig `json:"sniffer"`
-	Tun MihomoTunConfig `json:"tun"`
-	DNS MihomoDNSConfig `json:"dns"`
-	ProxyGroups []MihomoProxyGroup `json:"proxyGroups"`
-	RuleProviders []MihomoRuleProvider `json:"ruleProviders"`
-	Rules []MihomoRule `json:"rules"`
+	ExternalController string               `json:"externalController"`
+	ExternalUi         string               `json:"externalUi"`
+	ExternalUiUrl      string               `json:"externalUiUrl"`
+	Profile            MihomoProfileConfig  `json:"profile"`
+	Sniffer            MihomoSnifferConfig  `json:"sniffer"`
+	Tun                MihomoTunConfig      `json:"tun"`
+	DNS                MihomoDNSConfig      `json:"dns"`
+	ProxyGroups        []MihomoProxyGroup   `json:"proxyGroups"`
+	RuleProviders      []MihomoRuleProvider `json:"ruleProviders"`
+	Rules              []MihomoRule         `json:"rules"`
 }
 
 type MihomoSnifferConfig struct {

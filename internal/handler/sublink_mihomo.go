@@ -329,12 +329,12 @@ func buildMihomoTLSOptsExt(ext *database.ExternalNode, add func(string, interfac
 		}
 	} else {
 		if ext.RealityEnabled && ext.RealityServer != "" {
-			add("servername", ext.RealityServer)
+			add("servername", stripHostPort(ext.RealityServer))
 		} else if ext.ServerName != "" {
 			add("servername", ext.ServerName)
 		}
 	}
-	add("skip-cert-verify", true)
+	add("skip-cert-verify", ext.SkipCertVerify)
 	add("client-fingerprint", "chrome")
 	if ext.RealityEnabled && ext.RealityPubkey != "" {
 		add("reality-opts", map[string]interface{}{
