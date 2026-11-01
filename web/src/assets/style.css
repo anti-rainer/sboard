@@ -290,7 +290,9 @@ hr {
   transition: box-shadow var(--sb-dur) var(--sb-ease),
     border-color var(--sb-dur) var(--sb-ease),
     transform var(--sb-dur) var(--sb-ease);
-  overflow: hidden;
+  /* 不能用 overflow: hidden 裁剪圆角：卡片内的下拉菜单需要溢出显示。
+     圆角改由 card-header 自己声明。 */
+  overflow: visible;
 }
 
 .card:hover {
@@ -301,7 +303,7 @@ hr {
 .card-header {
   background: var(--sb-surface-2);
   border-bottom: 1px solid var(--sb-border);
-  border-radius: 0 !important;
+  border-radius: var(--sb-radius) var(--sb-radius) 0 0 !important;
   padding: 0.8rem 1rem;
   font-weight: 600;
   font-size: 0.9rem;

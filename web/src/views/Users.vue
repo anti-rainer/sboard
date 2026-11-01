@@ -52,15 +52,19 @@
                 <!-- 订阅链接下拉框 -->
                 <div class="dropdown w-100" v-if="nodes.length > 0">
                   <button 
-                    class="btn btn-sm btn-primary dropdown-toggle w-100" 
-                    type="button" 
+                    class="btn btn-sm btn-primary dropdown-toggle w-100"
+                    type="button"
+                    :data-sub-toggle="user.id"
                     @click.stop="toggleDropdown(user.id)"
                   >
                     <i class="bi bi-link-45deg"></i> 订阅链接
                   </button>
-                  <ul 
-                    class="dropdown-menu w-100 shadow sub-link-menu" 
-                    :class="{ show: openDropdownId === user.id }"
+                  <ul
+                    class="dropdown-menu w-100 shadow sub-link-menu"
+                    :class="{
+                      show: openDropdownId === user.id,
+                      'drop-up': dropUpId === user.id,
+                    }"
                     :style="openDropdownId === user.id ? { display: 'block' } : {}"
                   >
                     <template v-for="node in nodes" :key="node.id">
@@ -235,7 +239,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject, computed } from 'vue'
+import { ref, onMounted, onUnmounted, inject, computed, nextTick } from 'vue'
 import { Modal } from 'bootstrap'
 import { getUsers, createUser, updateUser, deleteUser, getNodes, type User, type Node } from '@/api'
 
@@ -245,6 +249,8 @@ const users = ref<User[]>([])
 const nodes = ref<Node[]>([])
 const loading = ref(false)
 const openDropdownId = ref<number | null>(null)
+// 菜单是否需要向上弹出（卡片靠近视口底部时）
+const dropUpId = ref<number | null>(null)
 // 展开中的节点子菜单，形如 "用户ID|节点tag"
 const openNodeMenu = ref<string | null>(null)
 
@@ -325,7 +331,25 @@ function toggleDropdown(userId: number) {
   const next = openDropdownId.value === userId ? null : userId
   openDropdownId.value = next
   // 收起主菜单时同步收起子菜单
-  if (next === null) openNodeMenu.value = null
+  if (next === null) {
+    openNodeMenu.value = null
+    dropUpId.value = null
+    return
+  }
+
+  // 卡片靠屏幕底部时，菜单向下展开会跑到视口外（移动端尤其明显）。
+  // 这里先量按钮下方还剩多少空间，不够就改成向上弹。
+  dropUpId.value = null
+  nextTick(() => {
+    const btn = document.querySelector<HTMLElement>(
+      `[data-sub-toggle="${userId}"]`
+    )
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    // 菜单大约要 90px 起步，子菜单展开后更高；宁可提前向上弹
+    if (spaceBelow < 260) dropUpId.value = userId
+  })
 }
 
 function toggleNodeMenu(userId: number, nodeTag: string) {
@@ -502,94 +526,73 @@ async function doDelete() {
 </script>
 
 <style scoped>
-.user-card {
-  background: var(--sb-surface);
-  border: none;
-  border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  /* overflow: hidden; 移除这个，否则下拉菜单会被裁剪 */
-  animation: fadeInUp 0.5s ease-out;
-  margin-bottom: 1rem;
-}
-
-.user-card::before {
-  content: '';
+/* 订阅下拉：不用 Popper，直接相对按钮定位。
+   卡片本身不再 overflow:hidden，菜单可以正常溢出到卡片外。 */
+.sub-link-menu.show {
   position: absolute;
-  top: 0;
+  top: calc(100% + 4px);
   left: 0;
-  width: 100%;
-  height: 4px;
-  background: var(--sb-accent);
-  transform: scaleX(0);
-  transition: transform 0.3s ease;
-}
-
-.user-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-}
-
-.user-card:hover::before {
-  transform: scaleX(1);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.dropdown-menu.show {
-  position: absolute;
-  inset: 0px auto auto 0px;
-  margin: 0px;
-  transform: translate(0px, 38px);
+  right: 0;
+  margin: 0;
   z-index: 1050;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+
+/* 空间不够时向上弹：菜单底边贴住按钮上沿 */
+.sub-link-menu.drop-up.show {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
 /* 节点项：块级元素，子菜单展开时把后续节点往下挤开 */
 .dropdown-submenu {
   display: block;
 }
-/* 子菜单：完全自绘，不用 Bootstrap 的 .dropdown-menu。
-   关键点——.dropdown-menu 自带 position:absolute，会把子菜单浮到父菜单
-   之上，视觉上「盖住」后面的节点（vless 被顶进 trojan 的展开板）。
-   这里用普通块级流，靠 max-height 过渡展开。 */
+
+.dropdown-submenu > .dropdown-item.is-open {
+  background: var(--sb-accent-soft);
+  color: var(--sb-accent);
+}
+
+/* 子菜单：普通块级流，靠 v-show 展开。
+   不能用 .dropdown-menu 的 position:absolute，否则会盖住后面的节点。 */
 .node-submenu {
   list-style: none;
-  margin: 0;
-  padding: 0 0 0 0.9rem;
-  border-left: 2px solid rgba(25, 135, 84, 0.55);
-  background: rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+  margin: 0.1rem 0 0.25rem;
+  padding: 0.15rem 0 0.15rem 0.6rem;
+  border-left: 2px solid color-mix(in srgb, var(--sb-accent) 45%, transparent);
+  background: var(--sb-surface-3);
+  border-radius: 0 var(--sb-radius-sm) var(--sb-radius-sm) 0;
 }
+
 .node-submenu > li {
   display: block;
 }
+
 .node-submenu .node-link {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   padding: 0.34rem 0.5rem;
   font-size: 0.8rem;
-  color: var(--bs-body-color);
+  color: var(--sb-text-muted);
   text-decoration: none;
-  border-radius: 0.25rem;
+  border-radius: var(--sb-radius-sm);
   white-space: normal;
   word-break: break-word;
   line-height: 1.25;
+  transition: background var(--sb-dur) var(--sb-ease),
+    color var(--sb-dur) var(--sb-ease);
 }
+
 .node-submenu .node-link:hover,
 .node-submenu .node-link:active {
-  background: rgba(25, 135, 84, 0.18);
-  color: var(--bs-body-color);
+  background: var(--sb-accent-soft);
+  color: var(--sb-accent-hover);
 }
+
 .node-submenu .node-link i {
   flex: 0 0 auto;
   opacity: 0.85;
