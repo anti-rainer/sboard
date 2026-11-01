@@ -338,17 +338,31 @@ function toggleDropdown(userId: number) {
   }
 
   // 卡片靠屏幕底部时，菜单向下展开会跑到视口外（移动端尤其明显）。
-  // 这里先量按钮下方还剩多少空间，不够就改成向上弹。
+  // 先量按钮下方还剩多少空间，不够就向上弹。
   dropUpId.value = null
   nextTick(() => {
     const btn = document.querySelector<HTMLElement>(
       `[data-sub-toggle="${userId}"]`
     )
     if (!btn) return
+
+    const MENU_H = 96        // 菜单最小高度（几个节点折叠态）
+    const vh = window.innerHeight
     const rect = btn.getBoundingClientRect()
-    const spaceBelow = window.innerHeight - rect.bottom
-    // 菜单大约要 90px 起步，子菜单展开后更高；宁可提前向上弹
-    if (spaceBelow < 260) dropUpId.value = userId
+
+    if (vh - rect.bottom < MENU_H + 40) {
+      dropUpId.value = userId
+      // 向上弹也可能贴顶：按钮上方不够时把页面往下滚一点，
+      // 让菜单整体落进视口。等 DOM 更新完再量。
+      nextTick(() => {
+        const menu = btn.parentElement?.querySelector<HTMLElement>('.sub-link-menu.show')
+        if (!menu) return
+        const mr = menu.getBoundingClientRect()
+        if (mr.top < 8) {
+          window.scrollBy({ top: mr.top - 8, behavior: 'auto' })
+        }
+      })
+    }
   })
 }
 
