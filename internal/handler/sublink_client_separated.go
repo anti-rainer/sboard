@@ -161,12 +161,27 @@ func writeClientGeneral(b *strings.Builder, fmtType clientFormat, selfURL string
 	// private-ip-answer 这些 Shadowrocket 的键，写了会被当成未知键告警。
 	if fmtType == formatSurge {
 		b.WriteString("loglevel = notify\n")
+		// ipv6 保持关闭：手册说明开启后会查询 AAAA，可能增加 DNS 延迟，
+		// 只在需要时开；关闭状态下仍可直接用 IPv6 字面地址连节点。
 		b.WriteString("ipv6 = false\n")
-		b.WriteString("dns-server = system, 223.5.5.5, 119.29.29.29, 8.8.8.8, 1.1.1.1\n")
-		b.WriteString("skip-proxy = 127.0.0.1, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost, *.local, captive.apple.com\n")
+		// DNS 只保留国内解析器 + system。
+		// 8.8.8.8 / 1.1.1.1 在境内查询会被污染，而走代理的域名 Surge
+		// 默认在远端解析，本地根本用不到它们，留着只会拖慢或给出错 IP。
+		b.WriteString("dns-server = system, 223.5.5.5, 119.29.29.29\n")
+		// skip-proxy 不含 100.64.0.0/10（CGNAT）：部分运营商的 IMS/ePDG
+		// 落在该网段，写进来会强制走 VIF 绕过代理策略，VoWiFi 就代理不到了。
+		b.WriteString("skip-proxy = 127.0.0.1, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, localhost, *.local, captive.apple.com\n")
+		// 不含点的主机名（nas、router）交给 VIF 处理，不走代理
+		b.WriteString("exclude-simple-hostnames = true\n")
+		// 代理测速走代理，用 gstatic 没问题
 		b.WriteString("proxy-test-url = " + clientTestURL + "\n")
 		b.WriteString("test-timeout = 5\n")
-		b.WriteString("internet-test-url = " + clientTestURL + "\n")
+		// internet-test-url 同时是 DIRECT 策略的测速地址。
+		// 这里必须用境内可达的地址，否则 DIRECT 在测速面板里永远显示失败。
+		b.WriteString("internet-test-url = " + surgeInternetTestURL + "\n")
+		// UDP 流量匹配到不支持转发 UDP 的策略时的兜底行为。
+		// 显式写 REJECT：宁可不通也不静默直连泄露真实 IP。
+		b.WriteString("udp-policy-not-supported-behaviour = REJECT\n")
 		// VoWiFi 要能被代理，必须让 Surge 接管蜂窝服务的流量。
 		//
 		// 按官方手册：

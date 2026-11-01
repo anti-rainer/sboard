@@ -267,6 +267,10 @@ func generateSurgeNodeList(servers []ServerWithNodes, nodeConfigs map[uint]map[u
 	return b.String(), nil
 }
 
+// surgeInternetTestURL 是 Surge 的 internet-test-url，同时也是 DIRECT
+// 策略的测速地址，必须选境内可达的，否则 DIRECT 永远显示失败。
+const surgeInternetTestURL = "http://www.baidu.com"
+
 // surgeProviderInterval policy-path 的资源刷新间隔（秒）。
 const surgeProviderInterval = 86400
 

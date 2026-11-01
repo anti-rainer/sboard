@@ -330,6 +330,25 @@ func TestSurgeGeneralKeys(t *testing.T) {
 			t.Errorf("[General] 缺少 VoWiFi 接管开关 %q\n%s", mustHave, out)
 		}
 	}
+
+	// DIRECT 策略的测速地址必须是境内可达的，否则测速面板永远显示失败
+	if !strings.Contains(out, "internet-test-url = "+surgeInternetTestURL) {
+		t.Errorf("[General] internet-test-url 应为境内地址 %q\n%s", surgeInternetTestURL, out)
+	}
+	// 兜底行为显式声明，避免静默直连泄露
+	if !strings.Contains(out, "udp-policy-not-supported-behaviour = REJECT") {
+		t.Errorf("[General] 应显式声明 udp-policy-not-supported-behaviour=REJECT\n%s", out)
+	}
+	// skip-proxy 不能含 CGNAT 网段，否则运营商 IMS/ePDG 流量会绕过代理
+	if strings.Contains(out, "100.64.0.0/10") {
+		t.Errorf("[General] skip-proxy 含 100.64.0.0/10，会挡住 VoWiFi\n%s", out)
+	}
+	// 境内不需要被污染的公共 DNS
+	for _, bad := range []string{"8.8.8.8", "1.1.1.1"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("[General] dns-server 不该含 %s（境内被污染）\n%s", bad, out)
+		}
+	}
 }
 
 // 规则层：Surge 用 DEST-PORT，其它客户端用 DST-PORT；私有 IP 段用内置 LAN。
