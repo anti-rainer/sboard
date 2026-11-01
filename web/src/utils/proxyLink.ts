@@ -253,14 +253,22 @@ function parseVmess(link: string): ParsedProxy {
   if ((!out.network || out.network === 'tcp') && obfsType === 'http') {
     out.network = 'http'
   }
-  out.wsPath = cfg.path || ''
-  out.wsHost = cfg.host || ''
-  if (net === 'grpc') out.grpcService = cfg.path || ''
+  // path 只有 ws/h2/http/httpupgrade 才是路径。mkcp 的 path 是伪装
+  // seed，写进 ws_path 会让节点配置带上垃圾路径（xray 脚本会生成）。
+  if (net === 'ws' || net === 'h2' || net === 'http' || net === 'httpupgrade') {
+    out.wsPath = cfg.path || ''
+    out.wsHost = cfg.host || ''
+  } else if (net === 'grpc') {
+    out.grpcService = cfg.path || ''
+    out.wsHost = cfg.host || ''
+  }
 
   const tlsMode = (cfg.tls || '').toLowerCase()
   if (tlsMode === 'tls' || tlsMode === 'reality') {
     out.tls = true
-    out.sni = cfg.sni || ''
+    // 同 hysteria2 那一类：Caddy 反代分支的 vmess JSON 只有 host 没有
+    // sni，回退顺序按客户端惯例走 sni → host → 服务器地址。
+    out.sni = cfg.sni || cfg.host || cfg.add || ''
     out.fingerprint = cfg.fp || 'chrome'
     out.alpn = cfg.alpn || ''
     if (tlsMode === 'reality') {
@@ -421,10 +429,16 @@ export function parseProxyLink(rawLink: string): ParsedProxy {
     let userinfo = body.slice(0, at)
     const hostport = body.slice(at + 1)
 
-    // 关键兼容：userinfo 可能是 base64(none:uuid) 或 base64(password)
-    if (!userinfo.includes(':') && looksLikeBase64(userinfo)) {
+    // 关键兼容：少数面板会把 userinfo 整体 base64 包一层，形如
+    // base64(none:uuid) 或 base64(user:pass)。
+    //
+    // 但 trojan / hysteria2 / anytls 的 userinfo 本来就是明文密码，
+    // 而 UUID 恰好全部落在 base64 字母表内（连字符也在），直接解会
+    // 得到乱码——233boy 脚本默认 password=uuid，几乎每个节点都会踩到。
+    // 所以只在解码结果确实是可读文本时才采纳。
+    if (!userinfo.includes(':') && !isUuid(userinfo) && looksLikeBase64(userinfo)) {
       const decoded = decodeBase64Flexible(userinfo)
-      if (decoded.includes(':')) {
+      if (decoded.includes(':') && isReadableText(decoded)) {
         userinfo = decoded
       }
     }
@@ -439,10 +453,15 @@ export function parseProxyLink(rawLink: string): ParsedProxy {
 
   applyParams(out, params)
 
-  // trojan / hysteria2 / anytls 默认走 TLS
+  // trojan / hysteria2 / anytls / tuic 默认走 TLS
   if (protocol === 'trojan' || protocol === 'hysteria2' || protocol === 'anytls' || protocol === 'tuic') {
     if (!out.reality) out.tls = true
-    if (!out.sni) out.sni = params.get('peer') || params.get('sni') || out.host
+  }
+  // 走 TLS 但链接里没给 sni：按客户端惯例先回退冒充域名（host=），
+  // 再回退服务器地址。233boy 的 Caddy 反代分支只写 host= 不写 sni，
+  // 不回退的话导入后 server_name 是空的，TLS 握手会用错 SNI。
+  if (out.tls && !out.sni) {
+    out.sni = out.wsHost || out.host
   }
   // vless 若带 pbk 已在上方置为 reality
   if (!out.name) out.name = out.host
@@ -493,6 +512,14 @@ function assignUserinfo(out: ParsedProxy, userinfo: string) {
       out.password = decodeURIComponent(userinfo)
       break
   }
+}
+
+/** 解码结果是否像正常文本：含替换符或控制字符说明是乱码 */
+function isReadableText(s: string): boolean {
+  if (!s) return false
+  // 凭据不会有几百个字符，过长说明解的是一段二进制
+  if (s.length > 256) return false
+  return !/[\u0000-\u001f\u007f-\u009f\ufffd]/.test(s)
 }
 
 function isUuid(v: string): boolean {

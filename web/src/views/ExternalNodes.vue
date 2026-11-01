@@ -321,6 +321,7 @@
                       <select class="form-select" v-model="form.transport_type">
                         <option value="ws">WebSocket</option>
                         <option value="grpc">gRPC</option>
+                        <option value="h2">HTTP/2 (h2)</option>
                         <option value="httpupgrade">HTTPUpgrade</option>
                       </select>
                     </div>

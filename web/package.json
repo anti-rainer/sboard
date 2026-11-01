@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:link": "esbuild tests/proxyLink.233boy.test.ts tests/proxyLink.generic.test.ts --bundle --platform=node --format=cjs --outdir=/tmp/plink --log-level=error && node /tmp/plink/proxyLink.233boy.test.js && node /tmp/plink/proxyLink.generic.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.3",
     "vite": "^8.1.5"
   }
