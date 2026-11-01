@@ -97,7 +97,10 @@ func buildAllClientNodes(fmtType clientFormat, servers []ServerWithNodes, nodeCo
 func buildClientNode(fmtType clientFormat, server *database.Server, node *database.InboundNode, nc *database.ServerNodeConfig, user *database.ProxyUser, lv int, opts *ProxyCustomOptions) clientNode {
 	p := initProxyBuildParams(server, node, nc, user, lv, opts)
 	name := sanitizeClientName(p.Name)
-	host := formatHostForURL(p.Host)
+	// 注意：这里不能走 formatHostForURL。.conf 的节点行是逗号分隔的字段表，
+	// host 是裸主机名，不是 URL——IPv6 加方括号会变成非法值。
+	// Surge 会直接报「字段 hostname 的值无效」并拒绝加载整份配置。
+	host := p.Host
 
 	var line string
 	switch fmtType {
@@ -118,7 +121,8 @@ func buildClientNode(fmtType clientFormat, server *database.Server, node *databa
 // buildClientNodeFromExternal 从外部节点构建。
 func buildClientNodeFromExternal(fmtType clientFormat, ext *database.ExternalNode) clientNode {
 	name := sanitizeClientName(ext.Name)
-	host := formatHostForURL(ext.Host)
+	// 同上：.conf 里的 host 是裸主机名，IPv6 不加方括号
+	host := ext.Host
 
 	var line string
 	switch fmtType {

@@ -165,6 +165,47 @@ func TestBuildSurgeSkipsUnsupported(t *testing.T) {
 	}
 }
 
+// IPv6 入口的 host 在 .conf 里必须写成裸地址。
+//
+// Surge 对 [Proxy] 行的 hostname 字段做严格校验，[2406:...] 会直接报
+// 「字段 hostname 的值无效」并拒绝加载整份配置；小火箭 / Loon 同理，
+// 方括号只是 URL 里的写法。URL 场景（v2ray 链接）仍然要加括号。
+func TestClientConfIPv6HostWithoutBrackets(t *testing.T) {
+	const v6 = "2406:da18:1cab:e00:e734:b603:81fb:3862"
+	user := &database.ProxyUser{Name: "u1"}
+	uuid := "11111111-2222-3333-4444-555555555555"
+
+	node := newSurgeTestNode("trojan")
+	// 直接验证三个客户端的建行函数拿到裸 host 时的输出
+	for name, build := range map[string]func() string{
+		"surge": func() string {
+			return buildSurgeProxyLine("n", v6, 18808, node, user, uuid)
+		},
+		"shadowrocket": func() string {
+			return buildShadowrocketProxyLine("n", v6, 18808, node, user, uuid)
+		},
+		"loon": func() string {
+			return buildLoonProxyLine("n", v6, 18808, node, user, uuid)
+		},
+	} {
+		got := build()
+		if got == "" {
+			t.Fatalf("%s 生成了空行", name)
+		}
+		if strings.Contains(got, "[") || strings.Contains(got, "]") {
+			t.Errorf("%s 的 host 不该带方括号: %s", name, got)
+		}
+		if !strings.Contains(got, v6) {
+			t.Errorf("%s 缺少裸 IPv6 地址: %s", name, got)
+		}
+	}
+
+	// 对照：buildClientNode 必须传裸 host（不能走 formatHostForURL）
+	if got := formatHostForURL(v6); got != "["+v6+"]" {
+		t.Errorf("URL 场景仍应加方括号，实际: %s", got)
+	}
+}
+
 // Surge 的 [General] 不能出现 Shadowrocket 的键。
 func TestSurgeGeneralKeys(t *testing.T) {
 	var b strings.Builder
