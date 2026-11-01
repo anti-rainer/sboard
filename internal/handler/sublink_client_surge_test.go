@@ -2,6 +2,7 @@ package handler
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -236,6 +237,51 @@ func TestSurgeUDPRelayCoverage(t *testing.T) {
 		if got := buildSurgeProxyLine("n", "1.2.3.4", 8388, n, user, uuid); got == "" {
 			t.Errorf("%s 应生成节点行（该协议自动支持 UDP）", proto)
 		}
+	}
+}
+
+// 名字里没有国家关键词的节点，也必须按 GeoIP 结果进组。
+//
+// 回归用例来自用户实测：la-megabox 的入口 104.194.70.123 GeoIP 是 US，
+// 名字里却没有任何美国关键词。小火箭 / Loon 用服务端算好的成员列表，
+// 组里正常包含它；Surge 只靠 policy-regex-filter 匹配名字，于是漏掉。
+// 所以 geoip-country 组的过滤正则必须并入「精确成员名」。
+func TestSurgeGeoGroupFilterIncludesExactNames(t *testing.T) {
+	pg := MihomoProxyGroup{Name: "AI", Type: "select", FilterMode: "geoip-country", Filter: "US,JP,SG"}
+	members := []string{"aws-jp", "la-megabox"}
+
+	filter := surgeGroupFilter(pg, members)
+	if filter == "" {
+		t.Fatal("过滤正则不该为空")
+	}
+
+	re, err := regexp.Compile(filter)
+	if err != nil {
+		t.Fatalf("生成的正则无法编译: %v\n%s", err, filter)
+	}
+	for _, n := range members {
+		if !re.MatchString(n) {
+			t.Errorf("成员 %q 应被匹配到\n正则: %s", n, filter)
+		}
+	}
+	// 名字含国家关键词的、当前不在成员里的节点，也允许自动进组
+	if !re.MatchString("美国-新节点") {
+		t.Errorf("含国家关键词的新节点应自动进组\n正则: %s", filter)
+	}
+	// 不该把无关节点卷进来
+	if re.MatchString("hkix-hytron") {
+		t.Errorf("HK 节点不该进 AI 组\n正则: %s", filter)
+	}
+}
+
+// regex 模式的组保持用户自己写的正则，不并入精确名单。
+func TestSurgeRegexModeGroupKeepsUserFilter(t *testing.T) {
+	pg := MihomoProxyGroup{Name: "HK-VoWiFi", Type: "select", FilterMode: "regex", Filter: "(?i)香港|HKG|hkix|HK"}
+	members := []string{"hkix-hytron"}
+
+	got := surgeGroupFilter(pg, members)
+	if got != "(?i)香港|HKG|hkix|HK" {
+		t.Errorf("regex 模式应原样使用用户的过滤条件，实际: %s", got)
 	}
 }
 

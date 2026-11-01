@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/sboard-go/sboard/internal/database"
@@ -321,7 +322,7 @@ func buildSurgeGroupsWithProvider(cfg *MihomoSubscriptionConfig, providerURL str
 		// 这里只用作「会不会是空组」的判断。
 		currentMembers := resolveGroupMembers(pg, allNodes, countryNodes)
 
-		filter := groupNameRegex(pg, currentMembers)
+		filter := surgeGroupFilter(pg, currentMembers)
 
 		// 只有在「组里没有任何显式成员、且当前筛不出节点」时才退化。
 		// 国内组显式带 DIRECT，永远不会是空组，所以要保留 policy-path——
@@ -364,4 +365,61 @@ func buildSurgeGroupsWithProvider(cfg *MihomoSubscriptionConfig, providerURL str
 		out = append(out, fmt.Sprintf("%s = %s", name, strings.Join(parts, ", ")))
 	}
 	return out
+}
+
+
+// exactNameRegex 把一组节点名拼成「精确匹配」正则，例如
+//
+//	^(?:la-megabox|aws-jp)$
+//
+// 名字里的正则元字符会被转义，避免节点名带 . 或 + 时误匹配。
+func exactNameRegex(names []string) string {
+	var quoted []string
+	for _, n := range names {
+		if n == "" {
+			continue
+		}
+		quoted = append(quoted, regexp.QuoteMeta(n))
+	}
+	if len(quoted) == 0 {
+		return ""
+	}
+	return "^(?:" + strings.Join(quoted, "|") + ")$"
+}
+
+// surgeGroupFilter 为 Surge 策略组生成 policy-regex-filter。
+//
+// Surge 只能在运行时按「节点名」筛，而面板模板里的 geoip-country /
+// geoip-cn 组是按**真实 GeoIP** 判定的——两套依据不同，只靠名字关键词
+// 会漏节点：用户实测 la-megabox（入口 104.194.70.123，GeoIP = US）名字里
+// 没有任何美国关键词，于是在 Surge 的 AI 组里消失，而小火箭 / Loon 因为
+// 用服务端算好的成员列表则正常包含。
+//
+// 所以这里取并集：
+//   A. 服务端按 GeoIP 算出的成员名，拼成精确正则——保证该进的一定进；
+//   B. 地区关键词正则——让以后新增的、名字带国家词的节点自动进组，
+//      不必等配置重新生成。
+//
+// filterMode=regex 的组（用户自己写的 HK/UK/CZ-VoWiFi）保持原样，
+// 用户明确要求那三个组用关键词正则。
+func surgeGroupFilter(pg MihomoProxyGroup, members []string) string {
+	kw := groupNameRegex(pg, members)
+
+	switch pg.FilterMode {
+	case "geoip-country", "geoip-cn":
+		exact := exactNameRegex(members)
+		switch {
+		case exact == "":
+			return kw
+		case kw == "":
+			if pg.FilterMode == "" {
+				return exact
+			}
+			return exact
+		}
+		// 关键词正则自带 (?i) 前缀，并集后同样生效
+		return kw + "|" + exact
+	default:
+		return kw
+	}
 }
