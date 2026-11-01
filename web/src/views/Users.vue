@@ -93,19 +93,20 @@
                   v-for="node in nodes"
                   :key="node.id"
                   class="node-tab"
-                  :class="{ active: activeNodeTag === node.tag }"
+                  :class="{ active: activeNodeId === node.id }"
                   type="button"
                   role="tab"
-                  :aria-selected="activeNodeTag === node.tag"
-                  @click="activeNodeTag = node.tag"
+                  :aria-selected="activeNodeId === node.id"
+                  @click="activeNodeId = node.id"
                 >
                   <i class="bi bi-hdd-network"></i>
-                  {{ node.tag }}
+                  {{ nodeLabel(node) }}
                 </button>
               </div>
 
               <!-- 当前节点的复制项 -->
               <div class="sub-links" v-if="activeNodeTag">
+
                 <!-- 原始订阅：三格式自适应，带节点 -->
                 <button class="sub-link" type="button"
                         @click="copySubLink(subTarget!, activeNodeTag)">
@@ -274,8 +275,22 @@ const nodes = ref<Node[]>([])
 const loading = ref(false)
 // 订阅链接弹框的目标用户
 const subTarget = ref<User | null>(null)
-// 弹框里当前选中的节点标签
-const activeNodeTag = ref<string>('')
+// 弹框里当前选中的节点（用 id，避免 tag 为空时互相干扰）
+const activeNodeId = ref<number | null>(null)
+
+/** 节点显示名：tag 为空时退回「协议 + 端口」，生产上确实有这种数据 */
+function nodeLabel(node: Node) {
+  if (node.tag) return node.tag
+  return `${node.protocol.toUpperCase()}:${node.port}`
+}
+
+/** 当前选中节点的 tag，供复制链接使用。
+    节点没设置 tag 时用 '-'，后端约定该值表示「不指定节点、走默认」。 */
+const activeNodeTag = computed(() => {
+  const n = nodes.value.find(x => x.id === activeNodeId.value)
+  if (!n) return ''
+  return n.tag || '-'
+})
 
 // 模态框
 const userModalEl = ref<HTMLElement | null>(null)
@@ -340,7 +355,7 @@ function isExpired(user: User) {
 function openSubModal(user: User) {
   subTarget.value = user
   // 默认选中第一个节点，省掉一次点击
-  activeNodeTag.value = nodes.value[0]?.tag || ''
+  activeNodeId.value = nodes.value[0]?.id ?? null
   subModal?.show()
 }
 
