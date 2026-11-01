@@ -49,65 +49,15 @@
                     <i class="bi bi-trash"></i> 删除
                   </button>
                 </div>
-                <!-- 订阅链接下拉框 -->
-                <div class="dropdown w-100" v-if="nodes.length > 0">
-                  <button 
-                    class="btn btn-sm btn-primary dropdown-toggle w-100"
-                    type="button"
-                    :data-sub-toggle="user.id"
-                    @click.stop="toggleDropdown(user.id)"
-                  >
-                    <i class="bi bi-link-45deg"></i> 订阅链接
-                  </button>
-                  <ul
-                    class="dropdown-menu w-100 shadow sub-link-menu"
-                    :class="{
-                      show: openDropdownId === user.id,
-                      'drop-up': dropUpId === user.id,
-                    }"
-                    :style="openDropdownId === user.id
-                      ? { display: 'block', maxHeight: menuMaxHeight + 'px' }
-                      : {}"
-                  >
-                    <template v-for="node in nodes" :key="node.id">
-                      <!-- 每个节点：展开成子菜单 -->
-                      <li class="dropdown-submenu"
-                          :class="{ 'is-expanded': openNodeMenu === user.id + '|' + node.tag }">
-                        <a
-                          class="dropdown-item small d-flex justify-content-between align-items-center"
-                          :class="{ 'is-open': openNodeMenu === user.id + '|' + node.tag }"
-                          href="#"
-                          @click.prevent.stop="toggleNodeMenu(user.id, node.tag)"
-                        >
-                          <span><i class="bi bi-hdd-network"></i> {{ node.tag }}</span>
-                          <i class="bi small"
-                             :class="openNodeMenu === user.id + '|' + node.tag ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
-                        </a>
-                        <ul
-                          v-show="openNodeMenu === user.id + '|' + node.tag"
-                          class="node-submenu"
-                        >
-                          <!-- 原始订阅：三格式自适应，带节点 -->
-                          <li>
-                            <a class="node-link" href="#"
-                               @click.prevent="copySubLink(user, node.tag)">
-                              <i class="bi bi-magic"></i>
-                              <span>原始订阅 <span class="text-muted">（自适应）</span></span>
-                            </a>
-                          </li>
-                          <!-- 客户端配置与 provider -->
-                          <li v-for="item in clientFiles" :key="item.client">
-                            <a class="node-link" href="#"
-                               @click.prevent="copyClientFile(user, node.tag, item)">
-                              <i :class="item.icon"></i>
-                              <span>{{ item.label }}</span>
-                            </a>
-                          </li>
-                        </ul>
-                      </li>
-                    </template>
-                  </ul>
-                </div>
+                <!-- 订阅链接：弹框选择，避免下拉框在卡片底部被挤出视口 -->
+                <button
+                  v-if="nodes.length > 0"
+                  class="btn btn-sm btn-primary w-100"
+                  type="button"
+                  @click="openSubModal(user)"
+                >
+                  <i class="bi bi-link-45deg"></i> 订阅链接
+                </button>
               </div>
             </div>
           </div>
@@ -116,6 +66,63 @@
       
       <div v-if="users.length === 0" class="col-12 text-center py-5">
         <p class="text-muted">暂无用户</p>
+      </div>
+    </div>
+
+    <!-- 订阅链接弹框 -->
+    <div class="modal fade" id="subLinkModal" tabindex="-1" ref="subModalEl">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div>
+              <h5 class="modal-title mb-0">
+                <i class="bi bi-link-45deg"></i> 订阅链接
+              </h5>
+              <div class="sub-modal-sub" v-if="subTarget">
+                {{ subTarget.name }}
+                <span class="text-muted">· {{ nodes.length }} 个节点</span>
+              </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div v-for="node in nodes" :key="node.id" class="sub-group">
+              <div class="sub-group-title">
+                <i class="bi bi-hdd-network"></i> {{ node.tag }}
+              </div>
+              <div class="sub-links">
+                <!-- 原始订阅：三格式自适应，带节点 -->
+                <button class="sub-link" type="button"
+                        @click="copySubLink(subTarget!, node.tag)">
+                  <span class="sub-link-main">
+                    <i class="bi bi-magic"></i>
+                    原始订阅
+                  </span>
+                  <span class="sub-link-hint">自适应 mihomo / sing-box / v2ray</span>
+                </button>
+                <!-- 客户端配置与 provider -->
+                <button v-for="item in clientFiles" :key="item.client" class="sub-link" type="button"
+                        @click="copyClientFile(subTarget!, node.tag, item)">
+                  <span class="sub-link-main">
+                    <i :class="item.icon"></i>
+                    {{ item.label }}
+                  </span>
+                  <span class="sub-link-hint">{{ item.hint }}</span>
+                </button>
+              </div>
+            </div>
+            <div v-if="nodes.length === 0" class="empty-state">
+              <i class="bi bi-diagram-3"></i>
+              <p>还没有节点，先到「节点管理」添加</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <span class="sub-modal-tip">
+              <i class="bi bi-info-circle"></i> 点击任意一项即可复制链接
+            </span>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -241,7 +248,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject, computed, nextTick } from 'vue'
+import { ref, onMounted, inject, computed } from 'vue'
 import { Modal } from 'bootstrap'
 import { getUsers, createUser, updateUser, deleteUser, getNodes, type User, type Node } from '@/api'
 
@@ -250,19 +257,16 @@ const showToast = inject<(type: 'success' | 'error' | 'warning' | 'info', title:
 const users = ref<User[]>([])
 const nodes = ref<Node[]>([])
 const loading = ref(false)
-const openDropdownId = ref<number | null>(null)
-// 菜单是否需要向上弹出（卡片靠近视口底部时）
-const dropUpId = ref<number | null>(null)
-// 菜单可用高度上限，超出则菜单内部滚动
-const menuMaxHeight = ref(0)
-// 展开中的节点子菜单，形如 "用户ID|节点tag"
-const openNodeMenu = ref<string | null>(null)
+// 订阅链接弹框的目标用户
+const subTarget = ref<User | null>(null)
 
 // 模态框
 const userModalEl = ref<HTMLElement | null>(null)
 const deleteModalEl = ref<HTMLElement | null>(null)
+const subModalEl = ref<HTMLElement | null>(null)
 let userModal: Modal | null = null
 let deleteModal: Modal | null = null
+let subModal: Modal | null = null
 
 // 表单
 const isEditing = ref(false)
@@ -284,26 +288,11 @@ const deleting = ref(false)
 // 计算最小日期
 const minDate = computed(() => new Date().toISOString().split('T')[0])
 
-// 点击外部关闭下拉框
-const handleClickOutside = (e: MouseEvent) => {
-  if (openDropdownId.value !== null) {
-    const target = e.target as HTMLElement
-    if (!target.closest('.dropdown')) {
-      openDropdownId.value = null
-      openNodeMenu.value = null
-    }
-  }
-}
-
 onMounted(async () => {
   await loadData()
   userModal = new Modal(userModalEl.value!)
   deleteModal = new Modal(deleteModalEl.value!)
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
+  subModal = new Modal(subModalEl.value!)
 })
 
 async function loadData() {
@@ -331,63 +320,9 @@ function isExpired(user: User) {
   return Boolean(user.expiry_date) && user.expiry_date < todayString
 }
 
-function toggleDropdown(userId: number) {
-  const next = openDropdownId.value === userId ? null : userId
-  openDropdownId.value = next
-  // 收起主菜单时同步收起子菜单
-  if (next === null) {
-    openNodeMenu.value = null
-    dropUpId.value = null
-    menuMaxHeight.value = 0
-    return
-  }
-
-  // 菜单可能溢出的两种情形：
-  //   1. 卡片靠屏幕底部，向下展开直接跑到视口外
-  //   2. 展开节点子菜单后菜单变高，把底边顶出视口
-  // 只翻转方向治不了第 2 种，所以同时给菜单设一个可用高度上限，
-  // 放不下时在菜单内部滚动。
-  dropUpId.value = null
-  menuMaxHeight.value = 0
-
-  nextTick(() => {
-    const btn = document.querySelector<HTMLElement>(
-      `[data-sub-toggle="${userId}"]`
-    )
-    if (!btn) return
-
-    const PAD = 12
-    const MIN_H = 120          // 低于这个高度就不值得往下弹了
-    const vh = window.innerHeight
-    const rect = btn.getBoundingClientRect()
-    const below = vh - rect.bottom - PAD
-    const above = rect.top - PAD
-
-    // 选空间大的一侧
-    const up = below < MIN_H && above > below
-    if (up) dropUpId.value = userId
-    const space = Math.max(up ? above : below, 96)
-
-    // 空间还受视口本身限制（按钮在屏幕正中时两侧都不大）
-    menuMaxHeight.value = Math.min(space, Math.floor(vh * 0.7))
-  })
-}
-
-function toggleNodeMenu(userId: number, nodeTag: string) {
-  const key = userId + '|' + nodeTag
-  const opening = openNodeMenu.value !== key
-  openNodeMenu.value = opening ? key : null
-
-  // 展开后把该节点滚进可视区：子菜单有 5 项，容器限高时
-  // 靠后的节点展开后底部会被裁掉，用户以为点不到。
-  if (opening) {
-    nextTick(() => {
-      const el = document.querySelector('.dropdown-submenu.is-expanded')
-      if (el && typeof el.scrollIntoView === 'function') {
-        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-      }
-    })
-  }
+function openSubModal(user: User) {
+  subTarget.value = user
+  subModal?.show()
 }
 
 // 路径式客户端配置。client 段由后端映射到具体格式：
@@ -395,14 +330,14 @@ function toggleNodeMenu(userId: number, nodeTag: string) {
 //   shadowrocket / loon -> 分流配置（策略组 + 规则）
 // 末段文件名只为客户端识别后缀，后端按 client 段决定输出。
 const clientFiles = [
-  { client: 'mihomo',      file: 'sboard.yaml', label: 'mihomo · provider',   icon: 'bi bi-filetype-yml' },
-  { client: 'sing-box',    file: 'sboard.json', label: 'sing-box · provider', icon: 'bi bi-filetype-json' },
-  { client: 'shadowrocket', file: 'sboard.conf', label: '小火箭 · 分流配置',    icon: 'bi bi-rocket' },
-  { client: 'loon',        file: 'sboard.conf', label: 'Loon · 分流配置',      icon: 'bi bi-phone' },
-  { client: 'surge',       file: 'sboard.conf', label: 'Surge · 分流配置',     icon: 'bi bi-lightning-charge' }
+  { client: 'mihomo',       file: 'sboard.yaml', label: 'mihomo · provider',  icon: 'bi bi-filetype-yml',   hint: '仅节点，供订阅引用' },
+  { client: 'sing-box',     file: 'sboard.json', label: 'sing-box · provider', icon: 'bi bi-filetype-json', hint: '仅节点，供订阅引用' },
+  { client: 'shadowrocket', file: 'sboard.conf', label: '小火箭 · 分流配置',   icon: 'bi bi-rocket',         hint: '策略组 + 规则，导入即用' },
+  { client: 'loon',         file: 'sboard.conf', label: 'Loon · 分流配置',     icon: 'bi bi-phone',          hint: '策略组 + 规则，导入即用' },
+  { client: 'surge',        file: 'sboard.conf', label: 'Surge · 分流配置',    icon: 'bi bi-lightning-charge', hint: '策略组 + 规则，导入即用' }
 ]
 
-function copyClientFile(user: User, nodeTag: string, item: { client: string; file: string; label: string }) {
+function copyClientFile(user: User, nodeTag: string, item: { client: string; file: string; label: string; hint: string }) {
   // 链接格式保持原样；客户端备注名由响应头 Content-Disposition 决定
   const url = `${window.location.origin}/subscribe/${user.uuid}/${encodeURIComponent(nodeTag)}/${item.client}/${item.file}`
   copyToClipboard(url).then(() => {
@@ -547,76 +482,114 @@ async function doDelete() {
 </script>
 
 <style scoped>
-/* 订阅下拉：不用 Popper，直接相对按钮定位。
-   卡片本身不再 overflow:hidden，菜单可以正常溢出到卡片外。 */
-.sub-link-menu.show {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  margin: 0;
-  z-index: 1050;
-  /* 具体高度由打开时算出的 menuMaxHeight 内联覆盖 */
-  max-height: 60vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+/* 弹框副标题 */
+.sub-modal-sub {
+  font-size: 0.8125rem;
+  color: var(--sb-text);
+  font-weight: 550;
+  margin-top: 0.15rem;
 }
 
-/* 空间不够时向上弹：菜单底边贴住按钮上沿 */
-.sub-link-menu.drop-up.show {
-  top: auto;
-  bottom: calc(100% + 4px);
+/* 每个节点一组 */
+.sub-group {
+  margin-bottom: 1rem;
 }
 
-/* 节点项：块级元素，子菜单展开时把后续节点往下挤开 */
-.dropdown-submenu {
-  display: block;
+.sub-group:last-child {
+  margin-bottom: 0;
 }
 
-.dropdown-submenu > .dropdown-item.is-open {
-  background: var(--sb-accent-soft);
-  color: var(--sb-accent);
-}
-
-/* 子菜单：普通块级流，靠 v-show 展开。
-   不能用 .dropdown-menu 的 position:absolute，否则会盖住后面的节点。 */
-.node-submenu {
-  list-style: none;
-  margin: 0.1rem 0 0.25rem;
-  padding: 0.15rem 0 0.15rem 0.6rem;
-  border-left: 2px solid color-mix(in srgb, var(--sb-accent) 45%, transparent);
-  background: var(--sb-surface-3);
-  border-radius: 0 var(--sb-radius-sm) var(--sb-radius-sm) 0;
-}
-
-.node-submenu > li {
-  display: block;
-}
-
-.node-submenu .node-link {
+.sub-group-title {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.34rem 0.5rem;
-  font-size: 0.8rem;
-  color: var(--sb-text-muted);
-  text-decoration: none;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sb-text-subtle);
+  margin-bottom: 0.5rem;
+}
+
+.sub-group-title i {
+  font-size: 0.85rem;
+}
+
+/* 链接项：整行可点，主标题 + 说明两行 */
+.sub-links {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sub-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  background: var(--sb-surface-2);
+  border: 1px solid var(--sb-border);
   border-radius: var(--sb-radius-sm);
-  white-space: normal;
-  word-break: break-word;
-  line-height: 1.25;
+  color: var(--sb-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
   transition: background var(--sb-dur) var(--sb-ease),
-    color var(--sb-dur) var(--sb-ease);
+    border-color var(--sb-dur) var(--sb-ease),
+    transform var(--sb-dur) var(--sb-ease);
 }
 
-.node-submenu .node-link:hover,
-.node-submenu .node-link:active {
+.sub-link:hover {
   background: var(--sb-accent-soft);
-  color: var(--sb-accent-hover);
+  border-color: color-mix(in srgb, var(--sb-accent) 35%, var(--sb-border));
 }
 
-.node-submenu .node-link i {
+.sub-link:active {
+  transform: scale(0.995);
+}
+
+.sub-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--sb-accent-ring);
+}
+
+.sub-link-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 550;
+  min-width: 0;
+}
+
+.sub-link-main i {
+  color: var(--sb-accent);
+  font-size: 0.95rem;
   flex: 0 0 auto;
-  opacity: 0.85;
+}
+
+.sub-link-hint {
+  font-size: 0.72rem;
+  color: var(--sb-text-subtle);
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 420px) {
+  .sub-link {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+
+  .sub-link-hint {
+    text-align: left;
+  }
+}
+
+.sub-modal-tip {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: var(--sb-text-subtle);
 }
 </style>

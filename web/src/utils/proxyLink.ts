@@ -20,6 +20,7 @@ export type ProxyProtocol =
   | 'anytls'
   | 'socks5'
   | 'tuic'
+  | 'naive'
 
 export interface ParsedProxy {
   protocol: ProxyProtocol
