@@ -206,6 +206,72 @@ func TestClientConfIPv6HostWithoutBrackets(t *testing.T) {
 	}
 }
 
+// Surge 用 policy-path 从订阅拉节点，不内嵌 [Proxy]。
+//
+// 这是 Surge 独有的能力：配置里只有策略组和规则，节点由订阅动态提供，
+// 用户等级调整或节点增删都不需要重新导入配置。
+func TestSurgeGroupsUsePolicyPath(t *testing.T) {
+	const provider = "https://example.com/subscribe/uuid/trojan/surge-provider/sboard.conf"
+
+	cfg := &MihomoSubscriptionConfig{}
+	cfg.Config.ProxyGroups = []MihomoProxyGroup{
+		{Name: "国外", Type: "select", FilterMode: "geoip-cn", Filter: "!cn"},
+		{Name: "国内", Type: "select", FilterMode: "geoip-cn", Filter: "cn"},
+		{Name: "HK-VoWiFi", Type: "select", FilterMode: "geoip-country", Filter: "HK"},
+	}
+
+	// 当前只有香港节点：国外组能筛到，国内组筛不到但带 DIRECT，AI 类组无节点
+	allNodes := []string{"香港", "hkix-hytron"}
+	countryNodes := map[string][]string{"HK": {"香港", "hkix-hytron"}}
+
+	groups := buildSurgeGroupsWithProvider(cfg, provider, allNodes, countryNodes)
+	joined := strings.Join(groups, "\n")
+
+	// 国外组：有节点，必须带 policy-path
+	if !strings.Contains(joined, "国外 = select, policy-path="+provider) {
+		t.Errorf("国外组应带 policy-path\n%s", joined)
+	}
+	// 国内组：显式带 DIRECT，即使当前没有国内节点也要保留 policy-path，
+	// 这样以后出现国内节点会自动收进来
+	if !strings.Contains(joined, "国内 = select, DIRECT, policy-path="+provider) {
+		t.Errorf("国内组应保留 policy-path 并含 DIRECT\n%s", joined)
+	}
+	// 两组都要有刷新间隔和正则筛选
+	if strings.Count(joined, "update-interval=86400") < 2 {
+		t.Errorf("policy-path 组缺少 update-interval\n%s", joined)
+	}
+	if !strings.Contains(joined, "policy-regex-filter=") {
+		t.Errorf("policy-path 组缺少 policy-regex-filter\n%s", joined)
+	}
+
+	// 筛不到节点的组必须退化成 DIRECT，不能留空组（Surge 会拒绝加载）
+	emptyCfg := &MihomoSubscriptionConfig{}
+	emptyCfg.Config.ProxyGroups = []MihomoProxyGroup{
+		{Name: "AI", Type: "select", FilterMode: "geoip-country", Filter: "US,JP"},
+	}
+	emptyGroups := buildSurgeGroupsWithProvider(emptyCfg, provider, allNodes, countryNodes)
+	if len(emptyGroups) != 1 || emptyGroups[0] != "AI = select, DIRECT" {
+		t.Errorf("筛不到节点时应退化为只有 DIRECT，实际: %v", emptyGroups)
+	}
+}
+
+// surge-provider 清单只输出节点行，不带段头。
+func TestSurgeNodeListHasNoSectionHeader(t *testing.T) {
+	user := &database.ProxyUser{Name: "u1", UUID: "11111111-2222-3333-4444-555555555555"}
+	_ = user
+	// 空数据时给出说明性注释而不是空文件
+	out, err := generateSurgeNodeList(nil, nil, user, 1, nil)
+	if err != nil {
+		t.Fatalf("生成清单失败: %v", err)
+	}
+	if out == "" {
+		t.Error("空清单也应给出注释，不能返回空字符串")
+	}
+	if strings.Contains(out, "[Proxy]") {
+		t.Errorf("policy-path 清单不该带段头: %s", out)
+	}
+}
+
 // Surge 的 [General] 不能出现 Shadowrocket 的键。
 func TestSurgeGeneralKeys(t *testing.T) {
 	var b strings.Builder

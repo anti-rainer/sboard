@@ -91,7 +91,7 @@ func formatFileExt(format string) string {
 		return "yaml"
 	case "singbox", "sing-box", "singbox-provider", "sing-box-provider":
 		return "json"
-	case "loon", "shadowrocket", "sr", "surge":
+	case "loon", "shadowrocket", "sr", "surge", "surge-provider":
 		return "conf"
 	default:
 		return "txt"
@@ -160,6 +160,8 @@ func (s *Server) handleSubByPath(c *gin.Context) {
 		format = "loon"
 	case "surge":
 		format = "surge"
+	case "surge-provider", "surge-nodes":
+		format = "surge-provider"
 	case "v2ray", "base64":
 		format = "v2ray"
 	default:
@@ -413,15 +415,22 @@ func (s *Server) handleSublink(c *gin.Context) {
 	case "loon-nodes":
 		content, err = generateLoonNodeList(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
 		contentType = "text/plain; charset=utf-8"
+	case "surge-provider":
+		// Surge 的 policy-path 资源：纯节点清单，每行一条，格式同 [Proxy] 段
+		content, err = generateSurgeNodeList(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
+		contentType = "text/plain; charset=utf-8"
 	case "surge":
-		// Surge 分流配置：节点内嵌在 [Proxy]，配策略组与规则，导入即用。
+		// Surge 分流配置：节点不内嵌，策略组用 policy-path 从订阅动态拉取。
 		//
-		// Surge 与 Shadowrocket 的能力差异（见 sublink_client_surge.go）：
-		// 不支持 VLESS / Reality / gRPC，所以同一用户拿到的节点数可能更少。
+		// Surge 是三个 iOS 客户端里唯一支持「配置引用订阅节点」的
+		// （policy-path），所以这里走分离模式：节点增删、用户等级调整
+		// 只需要订阅更新，用户不必重新导入配置。
 		//
-		// update-url 指回配置自身，Surge 的「更新配置」按它重新拉取。
+		// 协议能力差异（见 sublink_client_surge.go）：不支持 VLESS /
+		// Reality / gRPC，provider 清单会自动跳过这些节点。
 		surgeURL := buildPathSubURL(scheme, c.Request.Host, userUUID, nodeTag, "surge", "sboard.conf")
-		content, err = generateClientConfig2(formatSurge, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, surgeURL, "")
+		surgeNodesURL := buildPathSubURL(scheme, c.Request.Host, userUUID, nodeTag, "surge-provider", "sboard.conf")
+		content, err = generateClientConfig2(formatSurge, modeSeparated, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, surgeURL, surgeNodesURL)
 		contentType = "text/plain; charset=utf-8"
 	case "shadowrocket", "sr":
 		// 小火箭必须是内嵌节点模式。

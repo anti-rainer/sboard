@@ -75,6 +75,13 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 		}
 		b.WriteString("\n")
 
+	case fmtType == formatSurge:
+		// Surge 的节点由策略组的 policy-path 从订阅动态拉取，[Proxy] 留空。
+		// 这样节点增删、用户等级调整都不需要重新导入配置。
+		b.WriteString("[Proxy]\n")
+		b.WriteString("# 节点由下方策略组的 policy-path 从机场订阅自动加载，无需在此定义\n")
+		b.WriteString("\n")
+
 	case fmtType == formatLoon:
 		b.WriteString("[Remote Proxy]\n")
 		b.WriteString("SBoard = " + nodeSubURL + "\n")
@@ -118,8 +125,8 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 	case fmtType == formatLoon:
 		groups = buildLoonGroupsSeparated(cfg, "SBoard", filterNames)
 	case fmtType == formatSurge:
-		// Surge 的策略组语法与 Shadowrocket 一致（select / url-test + 成员列表）
-		groups = buildShadowrocketGroupsSeparated(cfg)
+		// Surge 用 policy-path 从订阅拉节点，成员由 policy-regex-filter 筛
+		groups = buildSurgeGroupsWithProvider(cfg, nodeSubURL, nodeNames, countryNodes)
 	}
 	for _, g := range groups {
 		b.WriteString(g)

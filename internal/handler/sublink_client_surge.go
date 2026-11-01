@@ -232,3 +232,125 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 	}
 	return fmt.Sprintf("%s = %s", name, head)
 }
+
+
+// generateSurgeNodeList 生成供策略组 policy-path 引用的纯节点清单。
+//
+// Surge 文档对 policy-path 资源有两种接受形式：
+//   - 一份完整的 Surge 配置（取其中的 [Proxy] 段）
+//   - 一份 policy 列表（每行一条，格式与 [Proxy] 段相同）
+//
+// 这里用后者，不带段头，最不容易产生歧义。
+//
+// 配置与节点分离后，节点增删、等级调整只影响本清单，
+// 用户不需要重新导入配置文件，Surge 按 update-interval 自动拉取。
+func generateSurgeNodeList(servers []ServerWithNodes, nodeConfigs map[uint]map[uint]*database.ServerNodeConfig, user *database.ProxyUser, lv int, externalNodes []database.ExternalNode) (string, error) {
+	nodes := buildAllClientNodes(formatSurge, servers, nodeConfigs, user, lv, externalNodes)
+
+	var b strings.Builder
+	if len(nodes) == 0 {
+		// 空清单会让 Surge 的策略组变成空组，这里至少留一条注释说明原因
+		b.WriteString("# 暂无 Surge 可用的节点（VLESS / Reality / gRPC 不被支持）\n")
+		return b.String(), nil
+	}
+	for _, n := range nodes {
+		b.WriteString(n.Line)
+		b.WriteString("\n")
+	}
+	return b.String(), nil
+}
+
+// surgeProviderInterval policy-path 的资源刷新间隔（秒）。
+const surgeProviderInterval = 86400
+
+// buildSurgeGroupsWithProvider 用 policy-path 从订阅拉节点来构造策略组。
+//
+// Surge 与 Shadowrocket / Loon 最大的不同就在这里：它允许策略组从外部 URL
+// 导入节点，所以配置里不必内嵌节点，首页/策略组里的节点能随订阅自动更新。
+//
+// 每个组这样写：
+//
+//	国外 = select, policy-path=<订阅地址>, update-interval=86400, policy-regex-filter=<地区正则>
+//
+// policy-regex-filter 只作用于 policy-path / include-all-proxies 导入的成员，
+// 不作用于显式列出的成员——所以国内的 DIRECT 直接列在组里即可。
+//
+// 若某组按当前节点算出来是空的，就不挂 policy-path，退化成只有 DIRECT，
+// 避免生成空组：Surge 遇到没有任何成员的组会整份配置报错。
+func buildSurgeGroupsWithProvider(cfg *MihomoSubscriptionConfig, providerURL string, allNodes []string, countryNodes map[string][]string) []string {
+	if cfg == nil {
+		return nil
+	}
+
+	var out []string
+	for _, pg := range cfg.Config.ProxyGroups {
+		name := sanitizeClientName(pg.Name)
+		if name == "" {
+			continue
+		}
+
+		// 成员由 Surge 在运行时按 policy-regex-filter 从订阅里筛，
+		// 这里不预计算成员列表。
+		groupType := "select"
+		if pg.Type == "url-test" || pg.Type == "fallback" {
+			groupType = pg.Type
+		}
+
+		parts := []string{groupType}
+
+		// 国内组显式列 DIRECT，让用户能选直连
+		isCN := pg.FilterMode == "geoip-cn" && strings.TrimSpace(pg.Filter) == "cn"
+		if isCN {
+			parts = append(parts, "DIRECT")
+		}
+
+		// 生成期先按当前节点算一遍成员：Surge 遇到没有成员的策略组会整份
+		// 配置报错，所以筛不出节点时退化成只有 DIRECT 的选择组。
+		// 成员本身由 Surge 在运行时按 policy-regex-filter 重新筛，
+		// 这里只用作「会不会是空组」的判断。
+		currentMembers := resolveGroupMembers(pg, allNodes, countryNodes)
+
+		filter := groupNameRegex(pg, currentMembers)
+
+		// 只有在「组里没有任何显式成员、且当前筛不出节点」时才退化。
+		// 国内组显式带 DIRECT，永远不会是空组，所以要保留 policy-path——
+		// 否则以后出现国内节点时不会自动收进来，得重新生成配置。
+		emptyRisk := !isCN && len(currentMembers) == 0
+		if providerURL == "" || filter == "" || emptyRisk {
+			if !isCN {
+				parts = append(parts, "DIRECT")
+			}
+			out = append(out, fmt.Sprintf("%s = %s", name, strings.Join(parts, ", ")))
+			continue
+		}
+
+		parts = append(parts,
+			"policy-path="+providerURL,
+			fmt.Sprintf("update-interval=%d", surgeProviderInterval),
+			"policy-regex-filter="+filter,
+		)
+
+		if groupType == "url-test" || groupType == "fallback" {
+			url := pg.URL
+			if url == "" {
+				url = clientTestURL
+			}
+			interval := pg.Interval
+			if interval <= 0 {
+				interval = 600
+			}
+			tolerance := pg.Tolerance
+			if tolerance <= 0 {
+				tolerance = 50
+			}
+			parts = append(parts,
+				"url="+url,
+				fmt.Sprintf("interval=%d", interval),
+				fmt.Sprintf("tolerance=%d", tolerance),
+			)
+		}
+
+		out = append(out, fmt.Sprintf("%s = %s", name, strings.Join(parts, ", ")))
+	}
+	return out
+}
