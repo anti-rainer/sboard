@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <!-- 导航栏 - 仅登录后显示 -->
-    <nav v-if="isLoggedIn" class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav v-if="isLoggedIn" class="navbar navbar-expand-lg">
       <div class="container-fluid">
         <a class="navbar-brand" href="#">SBoard</a>
         <button class="navbar-toggler" type="button" @click="navCollapsed = !navCollapsed">

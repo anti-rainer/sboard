@@ -1,46 +1,42 @@
 <template>
   <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between mb-4">
-      <h2>外部节点</h2>
-      <button class="btn btn-primary" @click="openAddModal">
+    <div class="sb-page-head">
+      <div>
+        <h4><i class="bi bi-globe2"></i> 外部节点</h4>
+        <div class="sb-subtitle">共 {{ nodes.length }} 个第三方节点 · 未被 SBoard Agent 管理</div>
+      </div>
+      <button class="btn btn-sm btn-primary" @click="openAddModal">
         <i class="bi bi-plus-lg"></i> 添加外部节点
       </button>
     </div>
 
-    <div class="row">
+    <div class="row g-3">
       <div v-for="node in nodes" :key="node.id" class="col-xl-3 col-lg-4 col-md-6">
-        <div class="card node-card mb-3">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <h6 class="card-title mb-0">{{ node.name }}</h6>
+        <div class="card node-card">
+          <div class="card-header">
+            <span class="node-tag" :title="node.name">{{ node.name }}</span>
+            <div class="node-head-right">
               <span :class="['badge', node.enabled ? 'bg-success' : 'bg-secondary']">
                 {{ node.enabled ? '启用' : '禁用' }}
               </span>
-            </div>
-            <div class="small mb-2">
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">协议:</span>
-                <span class="text-primary fw-bold">{{ node.protocol.toUpperCase() }}</span>
-              </div>
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">地址:</span>
-                <span>{{ node.host }}:{{ node.port }}</span>
-              </div>
-              <div class="d-flex justify-content-between" v-if="node.tls_enabled">
-                <span class="text-muted">TLS:</span>
-                <span class="text-success">
-                  <i class="bi bi-shield-check"></i>
-                  {{ node.reality_enabled ? 'Reality' : '启用' }}
-                </span>
-              </div>
-            </div>
-            <div class="btn-group btn-group-sm w-100">
-              <button class="btn btn-outline-primary" @click="openEditModal(node)">
-                <i class="bi bi-pencil"></i> 编辑
+              <button class="sb-icon-btn sb-icon-btn-xs" @click="openEditModal(node)" title="编辑">
+                <i class="bi bi-pencil"></i>
               </button>
-              <button class="btn btn-outline-danger" @click="confirmDelete(node)">
-                <i class="bi bi-trash"></i> 删除
+              <button class="sb-icon-btn sb-icon-btn-xs sb-icon-btn-danger" @click="confirmDelete(node)" title="删除">
+                <i class="bi bi-trash"></i>
               </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="node-meta">
+              <span class="node-proto">{{ node.protocol.toUpperCase() }}</span>
+            </div>
+            <div class="ext-addr">{{ node.host }}:{{ node.port }}</div>
+            <div class="node-tags" v-if="node.tls_enabled">
+              <span class="node-chip">
+                <i class="bi bi-shield-check"></i>
+                {{ node.reality_enabled ? 'Reality' : 'TLS' }}
+              </span>
             </div>
           </div>
         </div>
@@ -102,15 +98,15 @@
             <!-- 协议分支：先选主协议，再选具体分支 -->
             <div class="mb-3" v-if="branches.length">
               <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
-              <div class="d-flex flex-wrap gap-2">
-                <button type="button" v-for="b in branches" :key="b.id"
-                        class="btn btn-sm rounded-pill px-3"
-                        :class="activeBranch === b.id ? 'btn-primary' : 'btn-outline-secondary'"
-                        :title="b.hint || b.label"
-                        @click="applyBranch(b)">
-                  {{ b.label }}
-                </button>
-              </div>
+              <div class="branch-pills">
+                  <button type="button" v-for="b in branches" :key="b.id"
+                          class="branch-pill"
+                          :class="{ active: activeBranch === b.id }"
+                          :title="b.hint || b.label"
+                          @click="applyBranch(b)">
+                    {{ b.label }}
+                  </button>
+                </div>
               <small class="text-muted d-block mt-1" v-if="activeBranchHint">
                 <i class="bi bi-info-circle"></i> {{ activeBranchHint }}
               </small>
@@ -670,7 +666,11 @@ const applyParsedToForm = (p: ParsedProxy) => {
 const openAddModal = () => {
   editingId.value = null
   form.value = defaultForm()
-  activeBranch.value = null
+  // 默认套用第一个分支：胶囊要有明确选中态，
+  // 也避免默认值与该协议的合法组合不符
+  const first = branches.value[0]
+  if (first) applyBranch(first)
+  else activeBranch.value = null
   if (modal) modal.show()
 }
 

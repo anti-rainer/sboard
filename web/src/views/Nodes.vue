@@ -1,66 +1,65 @@
 <template>
   <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between mb-4">
-      <h2>节点管理</h2>
+    <div class="sb-page-head">
       <div>
-        <button class="btn btn-outline-info me-2" @click="showConfigModal">
+        <h4><i class="bi bi-diagram-3"></i> 节点管理</h4>
+        <div class="sb-subtitle">共 {{ nodes.length }} 个入站节点</div>
+      </div>
+      <div class="sb-toolbar">
+        <button class="btn btn-sm btn-secondary" @click="showConfigModal">
           <i class="bi bi-file-code"></i> 查看配置
         </button>
-        <button class="btn btn-primary" @click="openAddModal">
+        <button class="btn btn-sm btn-primary" @click="openAddModal">
           <i class="bi bi-plus-lg"></i> 添加节点
         </button>
       </div>
     </div>
 
-    <div id="nodesList" class="row">
+    <div id="nodesList" class="row g-3">
       <div 
         v-for="node in nodes" 
         :key="node.id" 
         class="col-xl-3 col-lg-4 col-md-6"
       >
         <div class="card node-card">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <h6 class="card-title mb-0">{{ node.tag }}</h6>
+          <div class="card-header">
+            <span class="node-tag" :title="node.tag">{{ node.tag }}</span>
+            <div class="node-head-right">
               <span :class="['badge', node.enabled ? 'bg-success' : 'bg-secondary']">
                 {{ node.enabled ? '启用' : '禁用' }}
               </span>
-            </div>
-            <div class="small mb-2">
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">协议:</span>
-                <span class="text-primary fw-bold">{{ node.protocol.toUpperCase() }}</span>
-              </div>
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">端口:</span>
-                <span>{{ node.port }}</span>
-              </div>
-              <div class="d-flex justify-content-between" v-if="node.tls_enabled">
-                <span class="text-muted">TLS:</span>
-                <span class="text-success">
-                  <i class="bi bi-shield-check"></i>
-                  {{ node.reality_enabled ? 'Reality' : '启用' }}
-                </span>
-              </div>
-              <div class="d-flex justify-content-between" v-if="node.transport_enabled">
-                <span class="text-muted">传输层:</span>
-                <span>{{ node.transport_type?.toUpperCase() }}</span>
-              </div>
-            </div>
-            <div class="btn-group btn-group-sm w-100">
-              <button class="btn btn-outline-primary" @click="openEditModal(node)">
-                <i class="bi bi-pencil"></i> 编辑
+              <button class="sb-icon-btn sb-icon-btn-xs" @click="openEditModal(node)" title="编辑">
+                <i class="bi bi-pencil"></i>
               </button>
-              <button class="btn btn-outline-danger" @click="confirmDelete(node)">
-                <i class="bi bi-trash"></i> 删除
+              <button class="sb-icon-btn sb-icon-btn-xs sb-icon-btn-danger" @click="confirmDelete(node)" title="删除">
+                <i class="bi bi-trash"></i>
               </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="node-meta">
+              <span class="node-proto">{{ node.protocol.toUpperCase() }}</span>
+              <span class="node-port">:{{ node.port }}</span>
+            </div>
+            <div class="node-tags" v-if="node.tls_enabled || (node.transport_enabled && node.transport_type)">
+              <span v-if="node.tls_enabled" class="node-chip">
+                <i class="bi bi-shield-check"></i>
+                {{ node.reality_enabled ? 'Reality' : 'TLS' }}
+              </span>
+              <span v-if="node.transport_enabled && node.transport_type" class="node-chip">
+                <i class="bi bi-arrow-left-right"></i>
+                {{ node.transport_type.toUpperCase() }}
+              </span>
             </div>
           </div>
         </div>
       </div>
       
-      <div v-if="nodes.length === 0" class="col-12 text-center py-5">
-        <p class="text-muted">暂无节点</p>
+      <div v-if="nodes.length === 0" class="col-12">
+        <div class="empty-state">
+          <i class="bi bi-diagram-3"></i>
+          <p>还没有节点，点击右上角「添加节点」开始</p>
+        </div>
       </div>
     </div>
 
@@ -98,10 +97,10 @@
               <!-- 协议分支：胶囊选择 -->
               <div class="mb-3" v-if="branches.length">
                 <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="branch-pills">
                   <button type="button" v-for="b in branches" :key="b.id"
-                          class="btn btn-sm rounded-pill px-3"
-                          :class="activeBranch === b.id ? 'btn-primary' : 'btn-outline-secondary'"
+                          class="branch-pill"
+                          :class="{ active: activeBranch === b.id }"
                           :title="b.hint || b.label"
                           @click="applyBranch(b)">
                     {{ b.label }}
@@ -113,8 +112,8 @@
               </div>
 
               <!-- TLS 配置 -->
-              <div class="form-check mb-2" v-if="!['shadowsocks','naive','socks','tuic'].includes(formData.protocol)">
-                <input class="form-check-input" type="checkbox" v-model="formData.tls_enabled" id="tlsEnabled">
+              <div class="form-check form-switch mb-2" v-if="!['shadowsocks','naive','socks','tuic'].includes(formData.protocol)">
+                <input class="form-check-input" type="checkbox" role="switch" v-model="formData.tls_enabled" id="tlsEnabled">
                 <label class="form-check-label" for="tlsEnabled">启用 TLS</label>
               </div>
               
@@ -172,8 +171,8 @@
               </div>
 
               <!-- 传输层配置 -->
-              <div class="form-check mb-2 mt-3" v-if="!['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)">
-                <input class="form-check-input" type="checkbox" v-model="formData.transport_enabled" id="transportEnabled">
+              <div class="form-check form-switch mb-2 mt-3" v-if="!['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)">
+                <input class="form-check-input" type="checkbox" role="switch" v-model="formData.transport_enabled" id="transportEnabled">
                 <label class="form-check-label" for="transportEnabled">启用传输层</label>
               </div>
               <div v-if="formData.transport_enabled && !['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)" id="transportFields">
@@ -320,8 +319,8 @@
                     <option value="new_reno">new_reno</option>
                   </select>
                 </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" v-model="formData.tuic_zero_rtt" id="tuicZeroRtt">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" v-model="formData.tuic_zero_rtt" id="tuicZeroRtt" role="switch">
                   <label class="form-check-label" for="tuicZeroRtt">启用 0-RTT 握手</label>
                 </div>
               </div>
@@ -356,8 +355,8 @@
                 <textarea class="form-control" v-model="formData.notes" rows="2" placeholder="可选，输入节点的备注信息"></textarea>
               </div>
 
-              <div class="form-check mt-3">
-                <input class="form-check-input" type="checkbox" v-model="formData.enabled" id="nodeEnabled">
+              <div class="form-check form-switch mt-3">
+                <input class="form-check-input" type="checkbox" role="switch" v-model="formData.enabled" id="nodeEnabled">
                 <label class="form-check-label" for="nodeEnabled">启用节点</label>
               </div>
             </div>
@@ -645,7 +644,11 @@ async function generateRealityKeys() {
 function openAddModal() {
   isEditing.value = false
   formData.value = getDefaultFormData()
-  syncActiveBranch()
+  // 默认套用第一个分支：既让分支胶囊有明确选中态，
+  // 也避免建出该协议不合法的组合（如 trojan 不带 TLS）
+  const first = branches.value[0]
+  if (first) applyBranch(first)
+  else syncActiveBranch()
   nodeModal?.show()
 }
 
@@ -807,47 +810,5 @@ function copyConfig() {
 </script>
 
 <style scoped>
-.node-card {
-  background: white;
-  border: none;
-  border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  animation: fadeInUp 0.5s ease-out;
-  margin-bottom: 1rem;
-}
 
-.node-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  transform: scaleX(0);
-  transition: transform 0.3s ease;
-}
-
-.node-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-}
-
-.node-card:hover::before {
-  transform: scaleX(1);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 </style>

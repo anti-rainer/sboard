@@ -1,18 +1,23 @@
 <template>
   <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between mb-4">
-      <h2>用户管理</h2>
+    <div class="sb-page-head">
+      <div>
+        <h4><i class="bi bi-people"></i> 用户管理</h4>
+        <div class="sb-subtitle">共 {{ users.length }} 个用户 · 按等级分组</div>
+      </div>
       <button class="btn btn-primary" @click="openAddModal">
         <i class="bi bi-plus-lg"></i> 添加用户
       </button>
     </div>
 
-    <div id="usersList" class="row">
+    <div id="usersList" class="row g-3">
       <!-- 按等级分组显示 -->
       <template v-for="level in [1, 2, 3]" :key="level">
         <template v-if="getUsersByLevel(level).length > 0">
-          <div class="col-12 mb-3">
-            <h5>等级 {{ level }}</h5>
+          <div class="col-12">
+            <div class="sb-group-title">
+              <i class="bi bi-layers"></i> 等级 {{ level }}
+            </div>
           </div>
           <div 
             v-for="user in getUsersByLevel(level)" 
@@ -21,21 +26,21 @@
             :style="openDropdownId === user.id ? { position: 'relative', zIndex: 1000 } : {}"
           >
             <div class="card user-card">
+              <div class="card-header">
+                <span class="user-name">
+                  <i class="bi bi-person-badge"></i> {{ user.name }}
+                </span>
+                <span :class="['badge', isExpired(user) ? 'bg-danger' : 'bg-success']">
+                  {{ isExpired(user) ? '已过期' : '有效' }}
+                </span>
+              </div>
               <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                  <h6 class="card-title mb-0">{{ user.name }}</h6>
-                  <span :class="['badge', isExpired(user) ? 'bg-danger' : 'bg-success']">
-                    {{ isExpired(user) ? '已过期' : '有效' }}
-                  </span>
+                <div class="sb-meta">
+                  <span>到期时间</span>
+                  <strong :class="isExpired(user) ? 'text-danger' : ''">
+                    {{ user.expiry_date }}
+                  </strong>
                 </div>
-                <p class="small mb-2">
-                  <span class="d-flex justify-content-between">
-                    <span class="text-muted">到期时间:</span>
-                    <span :class="isExpired(user) ? 'text-danger' : 'text-success'">
-                      {{ user.expiry_date }}
-                    </span>
-                  </span>
-                </p>
                 <div class="btn-group btn-group-sm w-100 mb-2">
                   <button class="btn btn-outline-primary" @click="openEditModal(user)">
                     <i class="bi bi-pencil"></i> 编辑
@@ -47,7 +52,7 @@
                 <!-- 订阅链接下拉框 -->
                 <div class="dropdown w-100" v-if="nodes.length > 0">
                   <button 
-                    class="btn btn-sm btn-success dropdown-toggle w-100" 
+                    class="btn btn-sm btn-primary dropdown-toggle w-100" 
                     type="button" 
                     @click.stop="toggleDropdown(user.id)"
                   >
@@ -498,7 +503,7 @@ async function doDelete() {
 
 <style scoped>
 .user-card {
-  background: white;
+  background: var(--sb-surface);
   border: none;
   border-radius: 16px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
@@ -516,7 +521,7 @@ async function doDelete() {
   left: 0;
   width: 100%;
   height: 4px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  background: var(--sb-accent);
   transform: scaleX(0);
   transition: transform 0.3s ease;
 }

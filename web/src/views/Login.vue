@@ -2,25 +2,25 @@
   <div class="login-wrapper">
     <div class="login-container">
       <div class="card login-card shadow-lg">
-        <div class="card-body p-5">
+        <div class="card-body p-4 p-sm-5">
           <div class="text-center mb-4">
-            <h2 class="fw-bold text-primary">
-              <i class="bi bi-shield-lock"></i> SBoard
-            </h2>
-            <p class="text-muted">管理面板登录</p>
+            <div class="login-mark"><i class="bi bi-shield-lock-fill"></i></div>
+            <h2 class="login-title">SBoard</h2>
+            <p class="login-sub">登录以继续管理面板</p>
           </div>
           
           <!-- 密码登录表单（如果未禁用） -->
           <form v-if="!disablePasswordLogin" @submit.prevent="handleLogin">
             <div class="mb-3">
               <label class="form-label">用户名</label>
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-person"></i></span>
-                <input 
-                  type="text" 
-                  class="form-control" 
-                  v-model="username" 
-                  placeholder="请输入用户名"
+              <div class="login-field">
+                <i class="bi bi-person"></i>
+                <input
+                  type="text"
+                  class="form-control"
+                  v-model="username"
+                  placeholder="用户名"
+                  autocomplete="username"
                   required
                 >
               </div>
@@ -28,13 +28,14 @@
             
             <div class="mb-4">
               <label class="form-label">密码</label>
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                <input 
-                  type="password" 
-                  class="form-control" 
-                  v-model="password" 
-                  placeholder="请输入密码"
+              <div class="login-field">
+                <i class="bi bi-lock"></i>
+                <input
+                  type="password"
+                  class="form-control"
+                  v-model="password"
+                  placeholder="密码"
+                  autocomplete="current-password"
                   required
                 >
               </div>
@@ -206,74 +207,118 @@ const handleOAuthLogin = async (provider: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(-45deg, #667eea, #764ba2, #6B8DD6, #8E37D7);
-  background-size: 400% 400%;
-  animation: gradientBG 15s ease infinite;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  background: var(--sb-bg);
 }
 
-@keyframes gradientBG {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+/* 背景：双色光晕 + 网格点阵，代替原来的紫色渐变动画 */
+.login-wrapper::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background-image:
+    radial-gradient(680px 420px at 22% 18%, rgba(79, 70, 229, 0.16), transparent 62%),
+    radial-gradient(620px 400px at 82% 78%, rgba(34, 211, 238, 0.13), transparent 60%);
+  pointer-events: none;
+}
+
+.login-wrapper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--sb-text-subtle) 32%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 72%);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .login-container {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 420px;
-  padding: 20px;
+  max-width: 400px;
 }
 
 .login-card {
-  border: none;
-  border-radius: 15px;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius-lg);
+  background: var(--sb-surface);
+  box-shadow: var(--sb-shadow-lg);
+  overflow: hidden;
 }
 
-.login-card .card-body h2 {
-  color: #667eea;
+.login-card:hover {
+  border-color: var(--sb-border);
+  box-shadow: var(--sb-shadow-lg);
 }
 
-.form-control:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+.login-mark {
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 0.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--sb-accent), #22d3ee);
+  color: #fff;
+  font-size: 1.35rem;
+  box-shadow: 0 8px 22px var(--sb-accent-ring);
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  padding: 12px;
-  font-weight: 500;
-  transition: transform 0.2s, box-shadow 0.2s;
+.login-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--sb-text);
 }
 
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+.login-sub {
+  margin: 0.3rem 0 0;
+  font-size: 0.8375rem;
+  color: var(--sb-text-muted);
 }
 
-.btn-primary:disabled {
-  transform: none;
-  box-shadow: none;
+/* 图标内嵌式输入框 */
+.login-field {
+  position: relative;
 }
 
-.input-group-text {
-  background: #f8f9fa;
-  border-right: none;
+.login-field > i {
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--sb-text-subtle);
+  font-size: 0.95rem;
+  pointer-events: none;
+  transition: color 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.input-group .form-control {
-  border-left: none;
+.login-field .form-control {
+  height: 44px;
+  padding-left: 2.4rem;
+  background: var(--sb-surface-2);
 }
 
-.input-group:focus-within .input-group-text {
-  border-color: #667eea;
+.login-field .form-control:focus {
+  background: var(--sb-surface);
+}
+
+.login-field:focus-within > i {
+  color: var(--sb-accent);
+}
+
+.login-card .btn-primary {
+  height: 44px;
+  font-weight: 600;
 }
 
 /* OAuth 分隔线 */
@@ -281,37 +326,43 @@ const handleOAuthLogin = async (provider: string) => {
   display: flex;
   align-items: center;
   text-align: center;
+  gap: 0.75rem;
 }
 
 .divider::before,
 .divider::after {
-  content: '';
+  content: "";
   flex: 1;
-  border-bottom: 1px solid #dee2e6;
+  height: 1px;
+  background: var(--sb-border);
 }
 
 .divider-text {
-  padding: 0 1rem;
-  color: #6c757d;
-  font-size: 0.875rem;
+  color: var(--sb-text-subtle);
+  font-size: 0.78rem;
+  flex: 0 0 auto;
 }
 
 /* OAuth 按钮 */
 .oauth-buttons .btn {
-  display: flex;
-  align-items: center;
+  height: 42px;
   justify-content: center;
-  padding: 10px;
-  transition: all 0.2s;
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border-strong);
+  color: var(--sb-text);
 }
 
 .oauth-buttons .btn:hover {
-  background-color: #f8f9fa;
-  border-color: #667eea;
-  color: #667eea;
+  background: var(--sb-surface-2);
+  border-color: var(--sb-border-strong);
+  color: var(--sb-text);
 }
 
-.oauth-buttons .btn i {
-  font-size: 1.1rem;
+.alert-danger {
+  background: var(--sb-danger-soft);
+  border: 1px solid color-mix(in srgb, var(--sb-danger) 28%, transparent);
+  color: var(--sb-danger);
+  font-size: 0.8375rem;
+  border-radius: var(--sb-radius-sm);
 }
 </style>

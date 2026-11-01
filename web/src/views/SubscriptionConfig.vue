@@ -1,52 +1,54 @@
 <template>
   <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between mb-4">
-      <h2>订阅配置</h2>
+    <div class="sb-page-head">
+      <div>
+        <h4><i class="bi bi-gear-wide-connected"></i> 订阅配置</h4>
+        <div class="sb-subtitle">客户端分流配置模板 · 启用中的模板会用于生成订阅</div>
+      </div>
     </div>
 
     <!-- Mihomo 配置区域 -->
     <div class="card mb-4">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-          <i class="bi bi-box me-2"></i>Mihomo 配置
-        </h5>
-        <button class="btn btn-primary btn-sm" @click="addMihomoConfig">
+        <span class="section-title">
+          <i class="bi bi-box"></i> Mihomo 配置
+        </span>
+        <button class="btn btn-sm btn-primary" @click="addMihomoConfig">
           <i class="bi bi-plus-lg me-1"></i>新增配置
         </button>
       </div>
       <div class="card-body">
         <!-- 配置列表 -->
-        <div v-if="mihomoConfigs.length === 0" class="text-center text-muted py-5">
-          <i class="bi bi-inbox display-4 d-block mb-3"></i>
-          <p>暂无 Mihomo 配置，点击上方按钮创建</p>
+        <div v-if="mihomoConfigs.length === 0" class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>暂无 Mihomo 配置，点击右上角「新增配置」创建</p>
         </div>
         <div v-else class="row g-3">
           <div v-for="config in mihomoConfigs" :key="config.id" class="col-md-6 col-lg-4">
-            <div class="card h-100" :class="{ 'border-primary': config.enabled }">
+            <div class="config-card" :class="{ 'config-enabled': config.enabled }">
               <div class="card-header d-flex justify-content-between align-items-center py-2">
-                <div class="d-flex align-items-center">
-                  <div class="form-check form-switch me-2">
-                    <input class="form-check-input" type="checkbox" 
+                <div class="d-flex align-items-center gap-2">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
                            :id="'mihomo-enable-' + config.id"
                            v-model="config.enabled"
                            @change="onMihomoToggle(config)">
                   </div>
-                  <strong>{{ config.name }}</strong>
+                  <span class="config-name">{{ config.name }}</span>
                 </div>
-                <div class="btn-group btn-group-sm">
-                  <button class="btn btn-outline-primary" @click="editMihomoConfig(config)" title="编辑">
+                <div class="config-actions">
+                  <button class="sb-icon-btn sb-icon-btn-xs" @click="editMihomoConfig(config)" title="编辑">
                     <i class="bi bi-pencil"></i>
                   </button>
-                  <button class="btn btn-outline-danger" @click="deleteMihomoConfig(config)" title="删除">
+                  <button class="sb-icon-btn sb-icon-btn-xs sb-icon-btn-danger" @click="deleteMihomoConfig(config)" title="删除">
                     <i class="bi bi-trash"></i>
                   </button>
                 </div>
               </div>
               <div class="card-body py-2">
-                <small class="text-muted">{{ config.description || '暂无描述' }}</small>
-                <div class="mt-2">
-                  <span v-for="module in config.modules" :key="module" 
-                        class="badge bg-secondary me-1 mb-1">{{ module }}</span>
+                <div class="config-desc">{{ config.description || '暂无描述' }}</div>
+                <div class="config-modules" v-if="config.modules && config.modules.length">
+                  <span v-for="module in config.modules" :key="module" class="node-chip">{{ module }}</span>
                 </div>
               </div>
             </div>
@@ -58,46 +60,45 @@
     <!-- SingBox 配置区域 -->
     <div class="card mb-4">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-          <i class="bi bi-box-seam me-2"></i>SingBox 配置
-        </h5>
-        <button class="btn btn-primary btn-sm" @click="addSingBoxConfig">
+        <span class="section-title">
+          <i class="bi bi-box-seam"></i> SingBox 配置
+        </span>
+        <button class="btn btn-sm btn-primary" @click="addSingBoxConfig">
           <i class="bi bi-plus-lg me-1"></i>新增配置
         </button>
       </div>
       <div class="card-body">
         <!-- 配置列表 -->
-        <div v-if="singboxConfigs.length === 0" class="text-center text-muted py-5">
-          <i class="bi bi-inbox display-4 d-block mb-3"></i>
-          <p>暂无 SingBox 配置，点击上方按钮创建</p>
+        <div v-if="singboxConfigs.length === 0" class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>暂无 SingBox 配置，点击右上角「新增配置」创建</p>
         </div>
         <div v-else class="row g-3">
           <div v-for="config in singboxConfigs" :key="config.id" class="col-md-6 col-lg-4">
-            <div class="card h-100" :class="{ 'border-primary': config.enabled }">
+            <div class="config-card" :class="{ 'config-enabled': config.enabled }">
               <div class="card-header d-flex justify-content-between align-items-center py-2">
-                <div class="d-flex align-items-center">
-                  <div class="form-check form-switch me-2">
-                    <input class="form-check-input" type="checkbox" 
+                <div class="d-flex align-items-center gap-2">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
                            :id="'singbox-enable-' + config.id"
                            v-model="config.enabled"
                            @change="onSingBoxToggle(config)">
                   </div>
-                  <strong>{{ config.name }}</strong>
+                  <span class="config-name">{{ config.name }}</span>
                 </div>
-                <div class="btn-group btn-group-sm">
-                  <button class="btn btn-outline-primary" @click="editSingBoxConfig(config)" title="编辑">
+                <div class="config-actions">
+                  <button class="sb-icon-btn sb-icon-btn-xs" @click="editSingBoxConfig(config)" title="编辑">
                     <i class="bi bi-pencil"></i>
                   </button>
-                  <button class="btn btn-outline-danger" @click="deleteSingBoxConfig(config)" title="删除">
+                  <button class="sb-icon-btn sb-icon-btn-xs sb-icon-btn-danger" @click="deleteSingBoxConfig(config)" title="删除">
                     <i class="bi bi-trash"></i>
                   </button>
                 </div>
               </div>
               <div class="card-body py-2">
-                <small class="text-muted">{{ config.description || '暂无描述' }}</small>
-                <div class="mt-2">
-                  <span v-for="module in config.modules" :key="module" 
-                        class="badge bg-info me-1 mb-1">{{ module }}</span>
+                <div class="config-desc">{{ config.description || '暂无描述' }}</div>
+                <div class="config-modules" v-if="config.modules && config.modules.length">
+                  <span v-for="module in config.modules" :key="module" class="node-chip">{{ module }}</span>
                 </div>
               </div>
             </div>
@@ -2717,6 +2718,91 @@ const removeSingBoxRuleSet = (index: number) => {
 </script>
 
 <style scoped>
+/* 区段标题 */
+.section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--sb-text);
+}
+
+.section-title i {
+  color: var(--sb-accent);
+  font-size: 0.95rem;
+}
+
+/* 配置卡 */
+.config-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius);
+  box-shadow: var(--sb-shadow-xs);
+  overflow: hidden;
+  transition: border-color var(--sb-dur) var(--sb-ease),
+    box-shadow var(--sb-dur) var(--sb-ease);
+}
+
+.config-card:hover {
+  border-color: var(--sb-border-strong);
+  box-shadow: var(--sb-shadow-sm);
+}
+
+/* 启用态：左侧强调条，比整圈蓝框克制 */
+.config-enabled {
+  border-color: color-mix(in srgb, var(--sb-accent) 38%, var(--sb-border));
+  box-shadow: inset 3px 0 0 var(--sb-accent), var(--sb-shadow-xs);
+}
+
+.config-enabled:hover {
+  box-shadow: inset 3px 0 0 var(--sb-accent), var(--sb-shadow-sm);
+}
+
+.config-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem 0.55rem 0.8rem;
+  background: var(--sb-surface-2);
+  border-bottom: 1px solid var(--sb-border);
+}
+
+.config-name {
+  font-size: 0.875rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--sb-text);
+}
+
+.config-actions {
+  display: inline-flex;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.config-card .card-body {
+  padding: 0.75rem 0.8rem 0.8rem;
+}
+
+.config-desc {
+  font-size: 0.8125rem;
+  color: var(--sb-text-muted);
+  line-height: 1.5;
+}
+
+.config-modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+
 .card {
   transition: all 0.2s ease;
 }
@@ -2803,7 +2889,7 @@ const removeSingBoxRuleSet = (index: number) => {
 }
 
 .draggable-item:hover .drag-handle {
-  color: #6c757d !important;
+  color: var(--sb-text-muted) !important;
 }
 
 .draggable-item.dragging {
@@ -2813,11 +2899,11 @@ const removeSingBoxRuleSet = (index: number) => {
 }
 
 .draggable-item.drag-over-top {
-  border-top: 2px solid #0d6efd !important;
+  border-top: 2px solid var(--sb-accent) !important;
 }
 
 .draggable-item.drag-over-bottom {
-  border-bottom: 2px solid #0d6efd !important;
+  border-bottom: 2px solid var(--sb-accent) !important;
 }
 
 .drag-handle {
@@ -2833,16 +2919,16 @@ const removeSingBoxRuleSet = (index: number) => {
 /* 卡片式列表样式 */
 .item-card {
   padding: 10px 14px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--sb-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sb-surface);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .item-card:hover {
-  border-color: #0d6efd;
-  background: #f8f9ff;
+  border-color: var(--sb-accent);
+  background: var(--sb-accent-soft);
 }
 
 .item-card .item-name {

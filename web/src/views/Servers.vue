@@ -1,17 +1,20 @@
 <template>
   <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2>服务器</h2>
+    <div class="sb-page-head">
       <div>
-        <button class="btn btn-info btn-sm me-2" @click="updateAllAgents" :disabled="updatingAgents">
-          <span v-if="updatingAgents" class="spinner-border spinner-border-sm me-1"></span>
-          <i v-else class="bi bi-cloud-download"></i> Agent更新
+        <h4><i class="bi bi-hdd-stack"></i> 服务器</h4>
+        <div class="sb-subtitle">共 {{ servers.length }} 台 · 拖动卡片左上角手柄可调整顺序</div>
+      </div>
+      <div class="sb-toolbar">
+        <button class="btn btn-sm btn-secondary" @click="updateAllAgents" :disabled="updatingAgents">
+          <span v-if="updatingAgents" class="spinner-border spinner-border-sm"></span>
+          <i v-else class="bi bi-cloud-download"></i> Agent 更新
         </button>
-        <button class="btn btn-warning btn-sm me-2" @click="deployAll" :disabled="deploying">
-          <span v-if="deploying" class="spinner-border spinner-border-sm me-1"></span>
+        <button class="btn btn-sm btn-secondary" @click="deployAll" :disabled="deploying">
+          <span v-if="deploying" class="spinner-border spinner-border-sm"></span>
           <i v-else class="bi bi-arrow-clockwise"></i> 部署
         </button>
-        <button class="btn btn-primary btn-sm" @click="openAddModal">
+        <button class="btn btn-sm btn-primary" @click="openAddModal">
           <i class="bi bi-plus-lg"></i> 添加
         </button>
       </div>
@@ -29,36 +32,39 @@
         @drop="handleDrop($event, index)"
       >
         <div class="server-card" :class="{ 'dragging': dragIndex === index, 'drag-over': dragOverIndex === index }">
-          <div 
-            class="drag-handle"
-            @mousedown="startDrag"
-            @mouseup="endDrag"
-            @mouseleave="endDrag"
-            @touchstart="startDrag"
-            @touchend="endDrag"
-          >
-            <i class="bi bi-grip-horizontal"></i>
-          </div>
           <div class="server-header">
-            <div>
-              <div class="server-title">{{ server.name }}</div>
-              <div class="server-host">
-                <i class="bi bi-hdd"></i> {{ maskIP(server.host) || '等待 Agent 上报' }}
+            <div class="server-title-row">
+              <div class="server-title-wrap">
+                <span
+                  class="drag-handle"
+                  @mousedown="startDrag"
+                  @mouseup="endDrag"
+                  @mouseleave="endDrag"
+                  @touchstart="startDrag"
+                  @touchend="endDrag"
+                  title="拖动排序"
+                >
+                  <i class="bi bi-grip-vertical"></i>
+                </span>
+                <div class="server-title">{{ server.name }}</div>
               </div>
-              <div v-if="server.host_ipv6" class="server-host text-info">
-                <i class="bi bi-hdd-stack"></i> {{ maskIP(server.host_ipv6) }}
+              <div class="server-badges">
+                <span :class="['badge', server.enabled ? 'bg-success' : 'bg-secondary']">
+                  {{ server.enabled ? '启用' : '禁用' }}
+                </span>
+                <!-- Agent 在线状态 -->
+                <span :class="['badge', server.agent_online ? 'bg-primary' : 'bg-warning']"
+                      :title="server.agent_online ? `在线 - ${server.agent_id}` : '等待连接'">
+                  <i :class="['bi', server.agent_online ? 'bi-wifi' : 'bi-wifi-off']"></i>
+                  {{ server.agent_online ? '在线' : '未连接' }}
+                </span>
               </div>
             </div>
-            <div class="d-flex flex-column align-items-end gap-1">
-              <span :class="['badge', server.enabled ? 'bg-success' : 'bg-secondary']">
-                {{ server.enabled ? '启用' : '禁用' }}
-              </span>
-              <!-- Agent 在线状态 -->
-              <span :class="['badge', server.agent_online ? 'bg-primary' : 'bg-warning']"
-                    :title="server.agent_online ? `在线 - ${server.agent_id}` : '等待连接'">
-                <i :class="['bi', server.agent_online ? 'bi-wifi' : 'bi-wifi-off']"></i>
-                {{ server.agent_online ? 'Agent 在线' : '未连接' }}
-              </span>
+            <div class="server-host">
+              <i class="bi bi-hdd"></i> {{ maskIP(server.host) || '等待 Agent 上报' }}
+            </div>
+            <div v-if="server.host_ipv6" class="server-host">
+              <i class="bi bi-hdd-stack"></i> {{ maskIP(server.host_ipv6) }}
             </div>
           </div>
           
@@ -109,22 +115,20 @@
           </div>
           
           <!-- 离线时显示基本信息 -->
-          <div v-else class="offline-info small mb-2">
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">分类:</span>
-              <span :class="getCategoryClass(server.category)">{{ getCategoryName(server.category) }}</span>
-            </div>
+          <div v-else class="offline-info mb-2">
+            <span class="meta-key">分类</span>
+            <span :class="getCategoryClass(server.category)">{{ getCategoryName(server.category) }}</span>
           </div>
           
           <div class="card-actions">
-            <button class="btn btn-outline-primary" @click="openEditModal(server)" title="编辑">
+            <button class="sb-icon-btn" @click="openEditModal(server)" title="编辑">
               <i class="bi bi-pencil"></i>
             </button>
-            <button class="btn btn-outline-success" @click="deployFolder(server)" :disabled="server.deployingFolder" title="部署">
+            <button class="sb-icon-btn" @click="deployFolder(server)" :disabled="server.deployingFolder" title="部署">
               <span v-if="server.deployingFolder" class="spinner-border spinner-border-sm"></span>
               <i v-else class="bi bi-cloud-upload"></i>
             </button>
-            <button class="btn btn-outline-danger" @click="confirmDelete(server)" title="删除">
+            <button class="sb-icon-btn sb-icon-btn-danger" @click="confirmDelete(server)" title="删除">
               <i class="bi bi-trash"></i>
             </button>
           </div>
@@ -530,10 +534,10 @@
               <!-- 协议分支：胶囊选择 -->
               <div class="mb-3" v-if="outboundBranches.length">
                 <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="branch-pills">
                   <button type="button" v-for="b in outboundBranches" :key="b.id"
-                          class="btn btn-sm rounded-pill px-3"
-                          :class="activeOutboundBranch === b.id ? 'btn-primary' : 'btn-outline-secondary'"
+                          class="branch-pill"
+                          :class="{ active: activeOutboundBranch === b.id }"
                           :title="b.hint || b.label"
                           @click="applyOutboundBranch(b)">
                     {{ b.label }}
@@ -672,7 +676,7 @@
                 </div>
                 <div class="row" v-if="outboundSupportsTls">
                   <div class="col-4 mb-3">
-                    <div class="form-check mt-4">
+                    <div class="form-check form-switch mt-4">
                       <input type="checkbox" class="form-check-input" v-model="outboundData.tls" id="vmessTls">
                       <label class="form-check-label" for="vmessTls">启用 TLS</label>
                     </div>
@@ -1779,37 +1783,22 @@ async function copyDeployCommand() {
 
 <style scoped>
 .server-card {
-  background: white;
-  border: none;
-  border-radius: 16px;
-  padding: 1.5rem;
-  padding-top: 2rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius);
+  padding: 1.05rem 1rem 1rem;
+  box-shadow: var(--sb-shadow-xs);
+  transition: box-shadow var(--sb-dur) var(--sb-ease),
+    border-color var(--sb-dur) var(--sb-ease),
+    transform var(--sb-dur) var(--sb-ease);
   position: relative;
   overflow: hidden;
-  animation: fadeInUp 0.5s ease-out;
-}
-
-.server-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  transform: scaleX(0);
-  transition: transform 0.3s ease;
 }
 
 .server-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-}
-
-.server-card:hover::before {
-  transform: scaleX(1);
+  transform: translateY(-2px);
+  border-color: var(--sb-border-strong);
+  box-shadow: var(--sb-shadow-md);
 }
 
 .server-card.dragging {
@@ -1819,56 +1808,80 @@ async function copyDeployCommand() {
 }
 
 .server-card.drag-over {
-  border: 2px dashed #667eea;
-  background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+  border: 2px dashed var(--sb-accent);
+  background: var(--sb-accent-soft);
+}
+
+.server-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .drag-handle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 1rem;
+  height: 1.15rem;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
   cursor: grab;
-  color: #d1d5db;
-  border-radius: 16px 16px 0 0;
-  transition: all 0.2s ease;
+  color: var(--sb-text-subtle);
+  border-radius: 5px;
+  opacity: 0.3;
+  z-index: 2;
+  transition: opacity var(--sb-dur) var(--sb-ease),
+    background var(--sb-dur) var(--sb-ease),
+    color var(--sb-dur) var(--sb-ease);
   user-select: none;
 }
 
+.server-card:hover .drag-handle { opacity: 1; }
+
 .drag-handle:hover {
-  background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
-  color: #667eea;
+  background: var(--sb-surface-3);
+  color: var(--sb-accent);
 }
 
 .drag-handle:active {
   cursor: grabbing;
-  color: #764ba2;
+  color: var(--sb-accent-hover);
 }
 
 .drag-handle i {
-  font-size: 1rem;
+  font-size: 0.8rem;
 }
 
 .server-header {
+  margin-bottom: 0.9rem;
+}
+
+.server-title-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.server-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
 }
 
 .server-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--sb-text);
+  margin: 0;
 }
 
 .server-host {
-  color: #6b7280;
+  color: var(--sb-text-muted);
   font-size: 0.875rem;
   display: flex;
   align-items: center;
@@ -1876,26 +1889,20 @@ async function copyDeployCommand() {
 }
 
 .card-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-  margin-top: 1rem;
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--sb-border);
 }
 
-.card-actions .btn {
-  font-size: 0.875rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.card-actions .btn:hover {
-  transform: translateY(-2px);
+.card-actions .sb-icon-btn {
+  flex: 1;
 }
 
 /* 监控面板样式 */
 .monitor-panel {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--sb-surface-2);
   border-radius: 8px;
   padding: 0.5rem;
 }
@@ -1906,7 +1913,7 @@ async function copyDeployCommand() {
 
 .monitor-label {
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--sb-text-muted);
 }
 
 .monitor-value {
@@ -1915,7 +1922,7 @@ async function copyDeployCommand() {
 }
 
 .monitor-panel .progress {
-  background-color: #e2e8f0;
+  background-color: var(--sb-border);
   margin-top: 2px;
 }
 
@@ -1944,7 +1951,13 @@ async function copyDeployCommand() {
 }
 
 .offline-info {
-  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--sb-radius-sm);
+  font-size: 0.8125rem;
+  background: var(--sb-surface-2);
   border-radius: 8px;
   padding: 0.5rem;
 }
@@ -1963,8 +1976,8 @@ async function copyDeployCommand() {
 /* 部署命令框样式 */
 .deploy-command-box {
   position: relative;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  background: var(--sb-surface-2);
+  border: 1px solid var(--sb-border);
   border-radius: 8px;
   padding: 0.75rem 2.5rem 0.75rem 0.75rem;
   cursor: pointer;
@@ -1973,8 +1986,8 @@ async function copyDeployCommand() {
 }
 
 .deploy-command-box:hover {
-  background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
-  border-color: #3b82f6;
+  background: var(--sb-accent-soft);
+  border-color: var(--sb-accent);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
 }
 
@@ -1985,7 +1998,7 @@ async function copyDeployCommand() {
 .deploy-command-text {
   display: block;
   font-size: 0.8rem;
-  color: #1e293b;
+  color: var(--sb-text);
   word-break: break-all;
   white-space: pre-wrap;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -1998,20 +2011,20 @@ async function copyDeployCommand() {
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #64748b;
+  color: var(--sb-text-muted);
   font-size: 1rem;
   transition: all 0.3s ease;
 }
 
 .deploy-command-box:hover .copy-icon {
-  color: #3b82f6;
+  color: var(--sb-accent);
   transform: translateY(-50%) scale(1.1);
 }
 
 /* 落地出站卡片样式 */
 .outbound-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  background: var(--sb-surface-2);
+  border: 1px solid var(--sb-border);
   border-radius: 12px;
   padding: 1rem;
   transition: all 0.3s ease;
@@ -2019,24 +2032,24 @@ async function copyDeployCommand() {
 
 .outbound-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #cbd5e1;
+  border-color: var(--sb-border-strong);
 }
 
 .outbound-card.outbound-disabled {
   opacity: 0.6;
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: var(--sb-surface-3);
 }
 
 .outbound-card .card-title {
   font-size: 1rem;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--sb-text);
   margin-bottom: 0.25rem;
 }
 
 .outbound-card .card-subtitle {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--sb-text-muted);
 }
 
 .outbound-card .btn-group .btn {
