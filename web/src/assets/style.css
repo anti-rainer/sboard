@@ -942,6 +942,18 @@ hr {
    body 内部滚动，不会切掉标题栏。 */
 /* 留白由 dialog 自己的 padding 提供，不靠 margin —— Bootstrap 默认
    margin:28px 会和居中逻辑叠加，把底边顶出视口。 */
+/* Bootstrap 的 .modal.fade .modal-dialog 带 transform: translate(0,-50px)
+   上滑入场。内容较高时动画首帧顶部会露出视口外（实测 top:-38），
+   在后台标签页里这个过渡甚至会被冻结在首帧。弹框只保留淡入。 */
+.modal.fade .modal-dialog {
+  transform: none;
+  transition: opacity var(--sb-dur) var(--sb-ease);
+}
+
+.modal.show .modal-dialog {
+  transform: none;
+}
+
 .modal-dialog-centered {
   display: flex;
   align-items: center;
