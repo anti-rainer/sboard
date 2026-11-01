@@ -86,14 +86,29 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <div v-for="node in nodes" :key="node.id" class="sub-group">
-              <div class="sub-group-title">
-                <i class="bi bi-hdd-network"></i> {{ node.tag }}
+            <template v-if="nodes.length > 0">
+              <!-- 节点切换：顶部横向标签 -->
+              <div class="node-tabs" role="tablist">
+                <button
+                  v-for="node in nodes"
+                  :key="node.id"
+                  class="node-tab"
+                  :class="{ active: activeNodeTag === node.tag }"
+                  type="button"
+                  role="tab"
+                  :aria-selected="activeNodeTag === node.tag"
+                  @click="activeNodeTag = node.tag"
+                >
+                  <i class="bi bi-hdd-network"></i>
+                  {{ node.tag }}
+                </button>
               </div>
-              <div class="sub-links">
+
+              <!-- 当前节点的复制项 -->
+              <div class="sub-links" v-if="activeNodeTag">
                 <!-- 原始订阅：三格式自适应，带节点 -->
                 <button class="sub-link" type="button"
-                        @click="copySubLink(subTarget!, node.tag)">
+                        @click="copySubLink(subTarget!, activeNodeTag)">
                   <span class="sub-link-main">
                     <i class="bi bi-magic"></i>
                     原始订阅
@@ -102,7 +117,7 @@
                 </button>
                 <!-- 客户端配置与 provider -->
                 <button v-for="item in clientFiles" :key="item.client" class="sub-link" type="button"
-                        @click="copyClientFile(subTarget!, node.tag, item)">
+                        @click="copyClientFile(subTarget!, activeNodeTag, item)">
                   <span class="sub-link-main">
                     <i :class="item.icon"></i>
                     {{ item.label }}
@@ -110,8 +125,8 @@
                   <span class="sub-link-hint">{{ item.hint }}</span>
                 </button>
               </div>
-            </div>
-            <div v-if="nodes.length === 0" class="empty-state">
+            </template>
+            <div v-else class="empty-state">
               <i class="bi bi-diagram-3"></i>
               <p>还没有节点，先到「节点管理」添加</p>
             </div>
@@ -259,6 +274,8 @@ const nodes = ref<Node[]>([])
 const loading = ref(false)
 // 订阅链接弹框的目标用户
 const subTarget = ref<User | null>(null)
+// 弹框里当前选中的节点标签
+const activeNodeTag = ref<string>('')
 
 // 模态框
 const userModalEl = ref<HTMLElement | null>(null)
@@ -322,6 +339,8 @@ function isExpired(user: User) {
 
 function openSubModal(user: User) {
   subTarget.value = user
+  // 默认选中第一个节点，省掉一次点击
+  activeNodeTag.value = nodes.value[0]?.tag || ''
   subModal?.show()
 }
 
@@ -490,29 +509,72 @@ async function doDelete() {
   margin-top: 0.15rem;
 }
 
-/* 每个节点一组 */
-.sub-group {
-  margin-bottom: 1rem;
-}
-
-.sub-group:last-child {
-  margin-bottom: 0;
-}
-
-.sub-group-title {
+/* 节点标签：横向排布，可左右滚动不换行 */
+.node-tabs {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--sb-text-subtle);
-  margin-bottom: 0.5rem;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--sb-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-.sub-group-title i {
+.node-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.node-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  color: var(--sb-text-muted);
+  background: var(--sb-surface-2);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--sb-dur) var(--sb-ease),
+    color var(--sb-dur) var(--sb-ease),
+    border-color var(--sb-dur) var(--sb-ease);
+}
+
+.node-tab i {
   font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.node-tab:hover {
+  background: var(--sb-surface-3);
+  color: var(--sb-text);
+  border-color: var(--sb-border-strong);
+}
+
+.node-tab.active {
+  background: var(--sb-accent);
+  border-color: var(--sb-accent);
+  color: #fff;
+  font-weight: 650;
+}
+
+.node-tab.active i {
+  opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .node-tab.active {
+    color: #0a0f1c;
+  }
+}
+
+.node-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--sb-accent-ring);
 }
 
 /* 链接项：整行可点，主标题 + 说明两行 */
