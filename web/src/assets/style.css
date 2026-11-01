@@ -936,6 +936,59 @@ hr {
 
 .modal-body { padding: 1.15rem 1.25rem; }
 
+/* Bootstrap 的 .modal-dialog-centered 用 flex + align-items:center 居中。
+   内容高度接近视口时，居中会把弹框顶部顶出屏幕（实测 top:-22px）。
+   改成用 margin:auto 居中：空间够就居中，不够就从顶部开始并让
+   body 内部滚动，不会切掉标题栏。 */
+/* 留白由 dialog 自己的 padding 提供，不靠 margin —— Bootstrap 默认
+   margin:28px 会和居中逻辑叠加，把底边顶出视口。 */
+.modal-dialog-centered {
+  display: flex;
+  align-items: center;
+  min-height: calc(100% - 1.5rem);
+  margin: 0.75rem auto;
+  padding: 0;
+}
+
+.modal-dialog-centered > .modal-content {
+  margin: auto;
+  max-height: calc(100vh - 1.5rem);
+}
+
+/* 可滚动弹框：高度由视口决定，内容超出时滚动 body 而非整个弹框 */
+.modal-dialog-scrollable {
+  height: auto;
+  max-height: calc(100vh - 1.5rem);
+  margin: 0.75rem auto;
+}
+
+.modal-dialog-scrollable > .modal-content {
+  max-height: calc(100vh - 1.5rem);
+}
+
+/* 所有弹框统一：高度不超过视口，留白用 margin 而非让内容溢出。
+   Bootstrap 默认 margin-top:1.75rem + 内容自适应高度，长表单会
+   直接把底边顶出屏幕（实测 bot 838 vs 视口 808）。 */
+.modal-dialog {
+  max-height: calc(100vh - 1.5rem);
+  margin: 0.75rem auto;
+}
+
+.modal-dialog > .modal-content {
+  max-height: calc(100vh - 1.5rem);
+}
+
+/* 内容比视口高时，让 body 内部滚动而不是整页滚动 */
+.modal-dialog > .modal-content > .modal-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-dialog > .modal-content > .modal-header,
+.modal-dialog > .modal-content > .modal-footer {
+  flex: 0 0 auto;
+}
+
 .modal-footer {
   padding: 0.85rem 1.25rem;
   border-top: 1px solid var(--sb-border);
