@@ -137,12 +137,13 @@
             <div v-if="tlsVisible" class="card mb-3">
               <div class="card-header">TLS 设置</div>
               <div class="card-body">
-                <div class="form-check form-switch mb-2" v-if="!isTuic">
+                <div class="form-check form-switch mb-2" v-if="!isForceTls">
                   <input class="form-check-input" type="checkbox" v-model="form.tls_enabled" id="extTlsEnabled">
                   <label class="form-check-label" for="extTlsEnabled">启用 TLS</label>
                 </div>
                 <div class="alert alert-secondary py-2 mb-2 small" v-else>
-                  <i class="bi bi-lock-fill"></i> TUIC 基于 QUIC，强制启用 TLS（ALPN 固定 h3）
+                  <i class="bi bi-lock-fill"></i>
+                  {{ form.protocol === 'tuic' ? 'TUIC' : 'Hysteria2' }} 基于 QUIC，强制启用 TLS（ALPN 固定 h3）
                 </div>
                 <template v-if="form.tls_enabled">
                   <div class="row mb-2">
@@ -474,8 +475,12 @@ const form = ref<ExternalNodeForm>(defaultForm())
 
 const isTuic = computed(() => form.value.protocol === 'tuic')
 const isSocks = computed(() => form.value.protocol === 'socks')
-/** TLS 卡：Socks 不支持；TUIC 强制启用 */
-const tlsVisible = computed(() => ['vmess', 'vless', 'trojan', 'anytls', 'tuic'].includes(form.value.protocol || ''))
+/** TLS 卡：Socks 不支持；TUIC / Hysteria2 基于 QUIC，强制启用 */
+const tlsVisible = computed(
+  () => ['vmess', 'vless', 'trojan', 'anytls', 'tuic', 'hysteria2'].includes(form.value.protocol || '')
+)
+/** 必须启用 TLS 的协议，开关做成只读提示 */
+const isForceTls = computed(() => ['tuic', 'hysteria2'].includes(form.value.protocol || ''))
 /** 传输层卡：仅 VMess/VLESS/Trojan，Socks 不支持 */
 const transportVisible = computed(
   () => ['vmess', 'vless', 'trojan'].includes(form.value.protocol || '') && !isSocks.value
@@ -520,6 +525,11 @@ function enforceProtocolConstraints() {
     f.transport_enabled = false
     if (!f.tuic_congestion) f.tuic_congestion = 'bbr'
     if (!f.tuic_udp_relay_mode) f.tuic_udp_relay_mode = 'native'
+  }
+  if (f.protocol === 'hysteria2') {
+    f.tls_enabled = true
+    f.reality_enabled = false
+    f.transport_enabled = false
   }
   if (f.protocol === 'socks') {
     f.tls_enabled = false
