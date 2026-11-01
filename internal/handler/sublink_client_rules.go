@@ -58,41 +58,53 @@ func buildRuleSetURL(path string) string {
 	return raw
 }
 
-// ruleSetSpec 规则集在两种客户端里的路径。
+// ruleSetSpec 规则集在各客户端里的路径。
 type ruleSetSpec struct {
 	LoonPath string
 	SRPath   string
-	IsIP     bool // IP 段规则集，引用时需 no-resolve
+	SurgePath string
+	// SurgeBuiltin 非空时直接用 Surge 内置规则集（如 LAN），不从仓库下载。
+	// 仓库里的 meta/ipcidr/*.list 是裸 CIDR，Surge 的规则集要求 IP-CIDR, 前缀，
+	// 用内置 LAN 覆盖私有网段更稳妥。
+	SurgeBuiltin string
+	IsIP         bool // IP 段规则集，引用时需 no-resolve
 }
 
 // ruleSetSpecs 面板 ruleProvider tag → 客户端规则集路径。
 var ruleSetSpecs = map[string]ruleSetSpec{
 	"AI": {
-		LoonPath: "loon/ai.list",
-		SRPath:   "shadowrocket/ai.list",
+		LoonPath:  "loon/ai.list",
+		SRPath:    "shadowrocket/ai.list",
+		SurgePath: "surge/ai.list",
 	},
 	"cn_domain": {
-		LoonPath: "loon/cn.list",
-		SRPath:   "shadowrocket/cn.list",
+		LoonPath:  "loon/cn.list",
+		SRPath:    "shadowrocket/cn.list",
+		SurgePath: "surge/cn.list",
 	},
 	"cn_ip": {
-		LoonPath: "loon/cncidr.list",
-		SRPath:   "shadowrocket/cncidr.list",
-		IsIP:     true,
+		LoonPath:  "loon/cncidr.list",
+		SRPath:    "shadowrocket/cncidr.list",
+		SurgePath: "surge/cncidr.list",
+		IsIP:      true,
 	},
 	"private_domain": {
-		LoonPath: "loon/private.list",
-		SRPath:   "shadowrocket/private.list",
+		LoonPath:  "loon/private.list",
+		SRPath:    "shadowrocket/private.list",
+		SurgePath: "surge/private.list",
 	},
 	"private_ip": {
-		// 这个仓库的 loon 目录没有 private 的 IP 段文件，用 meta 通用格式
-		LoonPath: "meta/ipcidr/private.list",
-		SRPath:   "meta/ipcidr/private.list",
-		IsIP:     true,
+		// loon / shadowrocket 目录没有 private 的 IP 段文件，用 meta 通用格式；
+		// Surge 用内置 LAN 规则集，省掉一次下载且格式一定合法
+		LoonPath:     "meta/ipcidr/private.list",
+		SRPath:       "meta/ipcidr/private.list",
+		SurgeBuiltin: "LAN",
+		IsIP:         true,
 	},
 	"proxy_domain": {
-		LoonPath: "loon/proxy.list",
-		SRPath:   "shadowrocket/proxy.list",
+		LoonPath:  "loon/proxy.list",
+		SRPath:    "shadowrocket/proxy.list",
+		SurgePath: "surge/proxy.list",
 	},
 }
 
@@ -104,14 +116,21 @@ type clientRuleSet struct {
 }
 
 // resolveRuleSet 按 tag 取客户端规则集地址。
-func resolveRuleSet(tag string, isLoon bool) (clientRuleSet, bool) {
+func resolveRuleSet(tag string, fmtType clientFormat) (clientRuleSet, bool) {
 	spec, ok := ruleSetSpecs[tag]
 	if !ok {
 		return clientRuleSet{}, false
 	}
+	if fmtType == formatSurge && spec.SurgeBuiltin != "" {
+		// 内置规则集直接引用名字，不走 buildRuleSetURL
+		return clientRuleSet{Tag: tag, URL: spec.SurgeBuiltin, IsIP: spec.IsIP}, true
+	}
 	path := spec.SRPath
-	if isLoon {
+	switch fmtType {
+	case formatLoon:
 		path = spec.LoonPath
+	case formatSurge:
+		path = spec.SurgePath
 	}
 	if path == "" {
 		return clientRuleSet{}, false
@@ -126,15 +145,17 @@ func resolveRuleSet(tag string, isLoon bool) (clientRuleSet, bool) {
 // proxy_domain 命中，VoWiFi 分流就失效了。
 //
 // 返回 inline（直接写在 [Rule]）与 remote（Loon 的 [Remote Rule] 声明）。
-func translateRulesToClient(cfg *MihomoSubscriptionConfig, isLoon bool) (inline []string, remote []clientRuleSet) {
+func translateRulesToClient(cfg *MihomoSubscriptionConfig, fmtType clientFormat) (inline []string, remote []clientRuleSet) {
 	if cfg == nil {
 		return
 	}
 
+	isLoon := fmtType == formatLoon
+
 	declared := make(map[string]bool)
 
 	emitRuleSet := func(tag, policy string) {
-		rs, ok := resolveRuleSet(tag, isLoon)
+		rs, ok := resolveRuleSet(tag, fmtType)
 		if !ok {
 			return
 		}
@@ -171,15 +192,21 @@ func translateRulesToClient(cfg *MihomoSubscriptionConfig, isLoon bool) (inline 
 		case "IP-CIDR6":
 			inline = append(inline, fmt.Sprintf("IP-CIDR6,%s,%s,no-resolve", r.Value, policy))
 		case "DST-PORT":
-			// mihomo 用 "500/4500" 表示端口段，但 Shadowrocket / Loon 的
-			// DST-PORT 只接受单个端口，逗号分隔会被当成非法值整条失效。
+			// mihomo 用 "500/4500" 表示两个端口，但客户端不接受逗号形式，
 			// 一行一个端口展开成多条规则。
+			//
+			// 关键字还要区分客户端：Surge 官方语法是 DEST-PORT，
+			// Shadowrocket / Loon 用 DST-PORT。
+			kw := "DST-PORT"
+			if fmtType == formatSurge {
+				kw = "DEST-PORT"
+			}
 			for _, port := range strings.Split(r.Value, "/") {
 				port = strings.TrimSpace(port)
 				if port == "" {
 					continue
 				}
-				inline = append(inline, fmt.Sprintf("DST-PORT,%s,%s", port, policy))
+				inline = append(inline, fmt.Sprintf("%s,%s,%s", kw, port, policy))
 			}
 		case "GEOIP":
 			inline = append(inline, fmt.Sprintf("GEOIP,%s,%s", r.Value, policy))
@@ -238,13 +265,13 @@ func writeRuleSection(b *strings.Builder, inline []string) {
 
 // writeShadowrocketRules 输出 Shadowrocket 的 [Rule] 段。
 func writeShadowrocketRules(b *strings.Builder, cfg *MihomoSubscriptionConfig) {
-	inline, _ := translateRulesToClient(cfg, false)
+	inline, _ := translateRulesToClient(cfg, formatShadowrocket)
 	writeRuleSection(b, inline)
 }
 
 // writeLoonRules 输出 Loon 的 [Remote Rule] 与 [Rule] 段。
 func writeLoonRules(b *strings.Builder, cfg *MihomoSubscriptionConfig, _ []string) {
-	inline, remote := translateRulesToClient(cfg, true)
+	inline, remote := translateRulesToClient(cfg, formatLoon)
 
 	if len(remote) > 0 {
 		b.WriteString("[Remote Rule]\n")
@@ -255,6 +282,16 @@ func writeLoonRules(b *strings.Builder, cfg *MihomoSubscriptionConfig, _ []strin
 		b.WriteString("\n")
 	}
 
+	writeRuleSection(b, inline)
+}
+
+// writeSurgeRules 输出 Surge 的 [Rule] 段。
+//
+// 与 Shadowrocket 的差别只在端口规则关键字（DEST-PORT）与 SURGE 内置
+// LAN 规则集，其余语法一致。Surge 不需要 [Remote Rule] 声明，
+// RULE-SET 直接在 [Rule] 里写 URL。
+func writeSurgeRules(b *strings.Builder, cfg *MihomoSubscriptionConfig) {
+	inline, _ := translateRulesToClient(cfg, formatSurge)
 	writeRuleSection(b, inline)
 }
 

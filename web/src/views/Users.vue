@@ -348,7 +348,8 @@ const clientFiles = [
   { client: 'mihomo',      file: 'sboard.yaml', label: 'mihomo · provider',   icon: 'bi bi-filetype-yml' },
   { client: 'sing-box',    file: 'sboard.json', label: 'sing-box · provider', icon: 'bi bi-filetype-json' },
   { client: 'shadowrocket', file: 'sboard.conf', label: '小火箭 · 分流配置',    icon: 'bi bi-rocket' },
-  { client: 'loon',        file: 'sboard.conf', label: 'Loon · 分流配置',      icon: 'bi bi-phone' }
+  { client: 'loon',        file: 'sboard.conf', label: 'Loon · 分流配置',      icon: 'bi bi-phone' },
+  { client: 'surge',       file: 'sboard.conf', label: 'Surge · 分流配置',     icon: 'bi bi-lightning-charge' }
 ]
 
 function copyClientFile(user: User, nodeTag: string, item: { client: string; file: string; label: string }) {

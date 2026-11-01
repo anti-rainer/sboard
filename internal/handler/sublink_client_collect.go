@@ -100,10 +100,17 @@ func buildClientNode(fmtType clientFormat, server *database.Server, node *databa
 	host := formatHostForURL(p.Host)
 
 	var line string
-	if fmtType == formatLoon {
+	switch fmtType {
+	case formatLoon:
 		line = buildLoonProxyLine(name, host, p.Port, node, user, p.UUID)
-	} else {
+	case formatSurge:
+		line = buildSurgeProxyLine(name, host, p.Port, node, user, p.UUID)
+	default:
 		line = buildShadowrocketProxyLine(name, host, p.Port, node, user, p.UUID)
+	}
+	// Surge 不支持的协议/传输会返回空行，整条丢弃而不是留下空行
+	if line == "" {
+		return clientNode{}
 	}
 	return clientNode{Name: name, Line: line}
 }
@@ -114,10 +121,16 @@ func buildClientNodeFromExternal(fmtType clientFormat, ext *database.ExternalNod
 	host := formatHostForURL(ext.Host)
 
 	var line string
-	if fmtType == formatLoon {
+	switch fmtType {
+	case formatLoon:
 		line = buildLoonProxyLineFromExternal(name, host, ext)
-	} else {
+	case formatSurge:
+		line = buildSurgeProxyLineFromExternal(name, host, ext)
+	default:
 		line = buildShadowrocketProxyLineFromExternal(name, host, ext)
+	}
+	if line == "" {
+		return clientNode{}
 	}
 	return clientNode{Name: name, Line: line}
 }

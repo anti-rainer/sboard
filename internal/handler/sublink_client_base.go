@@ -10,6 +10,7 @@ type clientFormat int
 const (
 	formatShadowrocket clientFormat = iota
 	formatLoon
+	formatSurge
 )
 
 // clientConfigMode 节点处理方式。

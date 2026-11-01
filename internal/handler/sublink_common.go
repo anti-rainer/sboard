@@ -91,7 +91,7 @@ func formatFileExt(format string) string {
 		return "yaml"
 	case "singbox", "sing-box", "singbox-provider", "sing-box-provider":
 		return "json"
-	case "loon", "shadowrocket", "sr":
+	case "loon", "shadowrocket", "sr", "surge":
 		return "conf"
 	default:
 		return "txt"
@@ -158,6 +158,8 @@ func (s *Server) handleSubByPath(c *gin.Context) {
 		format = "shadowrocket"
 	case "loon":
 		format = "loon"
+	case "surge":
+		format = "surge"
 	case "v2ray", "base64":
 		format = "v2ray"
 	default:
@@ -410,6 +412,16 @@ func (s *Server) handleSublink(c *gin.Context) {
 		contentType = "text/plain; charset=utf-8"
 	case "loon-nodes":
 		content, err = generateLoonNodeList(serversWithNodes, serverNodeConfigs, &user, lv, externalNodes)
+		contentType = "text/plain; charset=utf-8"
+	case "surge":
+		// Surge 分流配置：节点内嵌在 [Proxy]，配策略组与规则，导入即用。
+		//
+		// Surge 与 Shadowrocket 的能力差异（见 sublink_client_surge.go）：
+		// 不支持 VLESS / Reality / gRPC，所以同一用户拿到的节点数可能更少。
+		//
+		// update-url 指回配置自身，Surge 的「更新配置」按它重新拉取。
+		surgeURL := buildPathSubURL(scheme, c.Request.Host, userUUID, nodeTag, "surge", "sboard.conf")
+		content, err = generateClientConfig2(formatSurge, modeEmbedded, serversWithNodes, serverNodeConfigs, &user, lv, externalNodes, surgeURL, "")
 		contentType = "text/plain; charset=utf-8"
 	case "shadowrocket", "sr":
 		// 小火箭必须是内嵌节点模式。

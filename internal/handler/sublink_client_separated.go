@@ -57,6 +57,12 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 
 	var b strings.Builder
 
+	// Surge 的自动更新靠首行 #!MANAGED-CONFIG 声明，必须写在文件第一行，
+	// 且远端拉到的配置文件也必须带这一行，否则会退化成普通配置。
+	if fmtType == formatSurge && selfURL != "" {
+		b.WriteString("#!MANAGED-CONFIG " + selfURL + " interval=86400\n")
+	}
+
 	writeClientGeneral(&b, fmtType, selfURL)
 
 	// ---------- 节点区 ----------
@@ -111,7 +117,8 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 		groups = buildClientProxyGroups(cfg, nodeNames, countryNodes, fmtType)
 	case fmtType == formatLoon:
 		groups = buildLoonGroupsSeparated(cfg, "SBoard", filterNames)
-	default:
+	case fmtType == formatSurge:
+		// Surge 的策略组语法与 Shadowrocket 一致（select / url-test + 成员列表）
 		groups = buildShadowrocketGroupsSeparated(cfg)
 	}
 	for _, g := range groups {
@@ -121,9 +128,12 @@ func generateClientConfig2(fmtType clientFormat, mode clientConfigMode, servers 
 	b.WriteString("\n")
 
 	// ---------- 规则 ----------
-	if fmtType == formatLoon {
+	switch fmtType {
+	case formatLoon:
 		writeLoonRules(&b, cfg, groups)
-	} else {
+	case formatSurge:
+		writeSurgeRules(&b, cfg)
+	default:
 		writeShadowrocketRules(&b, cfg)
 	}
 
@@ -139,6 +149,23 @@ type loonFilter struct {
 // writeClientGeneral 输出 [General] 段。
 func writeClientGeneral(b *strings.Builder, fmtType clientFormat, selfURL string) {
 	b.WriteString("[General]\n")
+
+	// Surge 单独一套键名：它没有 bypass-tun / fallback-dns-server /
+	// private-ip-answer 这些 Shadowrocket 的键，写了会被当成未知键告警。
+	if fmtType == formatSurge {
+		b.WriteString("loglevel = notify\n")
+		b.WriteString("ipv6 = false\n")
+		b.WriteString("dns-server = system, 223.5.5.5, 119.29.29.29, 8.8.8.8, 1.1.1.1\n")
+		b.WriteString("skip-proxy = 127.0.0.1, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost, *.local, captive.apple.com\n")
+		b.WriteString("proxy-test-url = " + clientTestURL + "\n")
+		b.WriteString("test-timeout = 5\n")
+		b.WriteString("internet-test-url = " + clientTestURL + "\n")
+		// 注意：Surge 没有 update-url 这个键（官方手册 87 页里零出现），
+		// 自动更新改用文件首行的 #!MANAGED-CONFIG，见 generateClientConfig2。
+		b.WriteString("\n")
+		return
+	}
+
 	if fmtType == formatLoon {
 		b.WriteString("ip-mode = ipv4-only\n")
 		b.WriteString("dns-server = system, 223.5.5.5, 119.29.29.29, 8.8.8.8, 1.1.1.1\n")
