@@ -65,7 +65,9 @@
                       show: openDropdownId === user.id,
                       'drop-up': dropUpId === user.id,
                     }"
-                    :style="openDropdownId === user.id ? { display: 'block' } : {}"
+                    :style="openDropdownId === user.id
+                      ? { display: 'block', maxHeight: menuMaxHeight + 'px' }
+                      : {}"
                   >
                     <template v-for="node in nodes" :key="node.id">
                       <!-- 每个节点：展开成子菜单 -->
@@ -251,6 +253,8 @@ const loading = ref(false)
 const openDropdownId = ref<number | null>(null)
 // 菜单是否需要向上弹出（卡片靠近视口底部时）
 const dropUpId = ref<number | null>(null)
+// 菜单可用高度上限，超出则菜单内部滚动
+const menuMaxHeight = ref(0)
 // 展开中的节点子菜单，形如 "用户ID|节点tag"
 const openNodeMenu = ref<string | null>(null)
 
@@ -334,35 +338,38 @@ function toggleDropdown(userId: number) {
   if (next === null) {
     openNodeMenu.value = null
     dropUpId.value = null
+    menuMaxHeight.value = 0
     return
   }
 
-  // 卡片靠屏幕底部时，菜单向下展开会跑到视口外（移动端尤其明显）。
-  // 先量按钮下方还剩多少空间，不够就向上弹。
+  // 菜单可能溢出的两种情形：
+  //   1. 卡片靠屏幕底部，向下展开直接跑到视口外
+  //   2. 展开节点子菜单后菜单变高，把底边顶出视口
+  // 只翻转方向治不了第 2 种，所以同时给菜单设一个可用高度上限，
+  // 放不下时在菜单内部滚动。
   dropUpId.value = null
+  menuMaxHeight.value = 0
+
   nextTick(() => {
     const btn = document.querySelector<HTMLElement>(
       `[data-sub-toggle="${userId}"]`
     )
     if (!btn) return
 
-    const MENU_H = 96        // 菜单最小高度（几个节点折叠态）
+    const PAD = 12
+    const MIN_H = 120          // 低于这个高度就不值得往下弹了
     const vh = window.innerHeight
     const rect = btn.getBoundingClientRect()
+    const below = vh - rect.bottom - PAD
+    const above = rect.top - PAD
 
-    if (vh - rect.bottom < MENU_H + 40) {
-      dropUpId.value = userId
-      // 向上弹也可能贴顶：按钮上方不够时把页面往下滚一点，
-      // 让菜单整体落进视口。等 DOM 更新完再量。
-      nextTick(() => {
-        const menu = btn.parentElement?.querySelector<HTMLElement>('.sub-link-menu.show')
-        if (!menu) return
-        const mr = menu.getBoundingClientRect()
-        if (mr.top < 8) {
-          window.scrollBy({ top: mr.top - 8, behavior: 'auto' })
-        }
-      })
-    }
+    // 选空间大的一侧
+    const up = below < MIN_H && above > below
+    if (up) dropUpId.value = userId
+    const space = Math.max(up ? above : below, 96)
+
+    // 空间还受视口本身限制（按钮在屏幕正中时两侧都不大）
+    menuMaxHeight.value = Math.min(space, Math.floor(vh * 0.7))
   })
 }
 
@@ -549,6 +556,7 @@ async function doDelete() {
   right: 0;
   margin: 0;
   z-index: 1050;
+  /* 具体高度由打开时算出的 menuMaxHeight 内联覆盖 */
   max-height: 60vh;
   overflow-y: auto;
   overscroll-behavior: contain;
