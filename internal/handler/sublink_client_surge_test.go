@@ -52,7 +52,7 @@ func TestBuildSurgeProxyLine(t *testing.T) {
 		{
 			name: "shadowsocks 用 encrypt-method", protocol: "shadowsocks",
 			wantHead: "ss, 1.2.3.4, 8388",
-			mustHave: []string{"encrypt-method=aes-256-gcm", "password=sspass"},
+			mustHave: []string{"encrypt-method=aes-256-gcm", "password=sspass", "udp-relay=true"},
 			mustNot:  []string{", method="},
 		},
 		{
@@ -88,6 +88,7 @@ func TestBuildSurgeProxyLine(t *testing.T) {
 		{
 			name: "socks 用 socks5 与位置参数", protocol: "socks",
 			wantHead: "socks5, 1.2.3.4, 8388, u1, ",
+			mustHave: []string{"udp-relay=true"},
 			mustNot:  []string{"socks,", "username="},
 		},
 		{
@@ -206,6 +207,38 @@ func TestClientConfIPv6HostWithoutBrackets(t *testing.T) {
 	}
 }
 
+// VoWiFi 是 UDP 流量（IKE 500 / NAT-T 4500），策略必须能转发 UDP。
+//
+// Surge 各协议的 UDP 转发能力不同：
+//   Trojan / VMess / TUIC / Hysteria2 / AnyTLS  自动支持
+//   Shadowsocks / SOCKS5                        必须显式 udp-relay=true
+//   HTTP / HTTPS                                不支持
+//
+// 漏掉 udp-relay 时这些 UDP 包会被 udp-policy-not-supported-behaviour
+// 处理（新版本默认 REJECT），Wi-Fi Calling 直接不通。
+func TestSurgeUDPRelayCoverage(t *testing.T) {
+	user := &database.ProxyUser{Name: "u1"}
+	uuid := "11111111-2222-3333-4444-555555555555"
+
+	// 需要显式开启的两种协议
+	for _, proto := range []string{"shadowsocks", "socks"} {
+		n := newSurgeTestNode(proto)
+		got := buildSurgeProxyLine("n", "1.2.3.4", 8388, n, user, uuid)
+		if !strings.Contains(got, "udp-relay=true") {
+			t.Errorf("%s 必须显式 udp-relay=true，否则 VoWiFi 的 UDP 不通\n实际: %s", proto, got)
+		}
+	}
+
+	// 自动支持 UDP 的协议：不写 udp-relay 也能转发，写了也不算错，
+	// 这里只断言节点行能正常生成
+	for _, proto := range []string{"trojan", "vmess", "tuic", "hysteria2", "anytls"} {
+		n := newSurgeTestNode(proto)
+		if got := buildSurgeProxyLine("n", "1.2.3.4", 8388, n, user, uuid); got == "" {
+			t.Errorf("%s 应生成节点行（该协议自动支持 UDP）", proto)
+		}
+	}
+}
+
 // Surge 用 policy-path 从订阅拉节点，不内嵌 [Proxy]。
 //
 // 这是 Surge 独有的能力：配置里只有策略组和规则，节点由订阅动态提供，
@@ -286,6 +319,15 @@ func TestSurgeGeneralKeys(t *testing.T) {
 	for _, good := range []string{"loglevel", "dns-server", "skip-proxy", "proxy-test-url", "test-timeout"} {
 		if !strings.Contains(out, good) {
 			t.Errorf("[General] 缺少 %q\n%s", good, out)
+		}
+	}
+
+	// VoWiFi 要能被代理，必须让 Surge 接管蜂窝服务流量。
+	// include-cellular-services 必须与 include-all-networks 同时开启，
+	// 否则手册明确说明不生效。
+	for _, mustHave := range []string{"include-all-networks = true", "include-cellular-services = true"} {
+		if !strings.Contains(out, mustHave) {
+			t.Errorf("[General] 缺少 VoWiFi 接管开关 %q\n%s", mustHave, out)
 		}
 	}
 }

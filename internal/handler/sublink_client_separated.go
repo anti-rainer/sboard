@@ -167,6 +167,21 @@ func writeClientGeneral(b *strings.Builder, fmtType clientFormat, selfURL string
 		b.WriteString("proxy-test-url = " + clientTestURL + "\n")
 		b.WriteString("test-timeout = 5\n")
 		b.WriteString("internet-test-url = " + clientTestURL + "\n")
+		// VoWiFi 要能被代理，必须让 Surge 接管蜂窝服务的流量。
+		//
+		// 按官方手册：
+		//   include-all-networks     让 VIF 接管全部流量，包括绕过 VIF 绑定
+		//                            物理网卡发起的请求；是下面那项的**前置条件**
+		//   include-cellular-services 接管蜂窝服务的互联网流量，明确包含
+		//                            VoLTE / Wi-Fi Calling / IMS / MMS
+		//
+		// 不开这两项时，Wi-Fi Calling 的 IKE(UDP 500) / NAT-T(UDP 4500)
+		// 压根不进 Surge 的规则匹配，DEST-PORT 规则等同虚设。
+		//
+		// 手册同时提示：部分运营商会把蜂窝服务流量直接送到运营商网络而不
+		// 经过互联网，这类流量始终不进隧道，与配置无关。
+		b.WriteString("include-all-networks = true\n")
+		b.WriteString("include-cellular-services = true\n")
 		// 注意：Surge 没有 update-url 这个键（官方手册 87 页里零出现），
 		// 自动更新改用文件首行的 #!MANAGED-CONFIG，见 generateClientConfig2。
 		b.WriteString("\n")

@@ -82,6 +82,9 @@ func buildSurgeProxyLine(name, host string, port int, node *database.InboundNode
 		}
 		head = fmt.Sprintf("ss, %s, %d, encrypt-method=%s, password=%s",
 			host, port, method, getSS2022Password(node, uuid))
+		// Shadowsocks 的 UDP 转发不是自动的，必须显式开启。
+		// 不开的话 VoWiFi 的 IKE/NAT-T 走 UDP 会被 REJECT。
+		kv = append(kv, "udp-relay=true")
 
 	case "vmess":
 		head = fmt.Sprintf("vmess, %s, %d, username=%s", host, port, uuid)
@@ -125,6 +128,8 @@ func buildSurgeProxyLine(name, host string, port int, node *database.InboundNode
 	case "socks":
 		// 用户名密码是位置参数，不写成 key=value
 		head = fmt.Sprintf("socks5, %s, %d, %s, %s", host, port, user.Name, uuid)
+		// 同 Shadowsocks：SOCKS5 的 UDP 转发必须显式开启
+		kv = append(kv, "udp-relay=true")
 
 	case "vless":
 		// Surge 官方协议表没有 VLESS
@@ -163,6 +168,7 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 			pwd = ext.UUID
 		}
 		head = fmt.Sprintf("ss, %s, %d, encrypt-method=%s, password=%s", host, ext.Port, method, pwd)
+		kv = append(kv, "udp-relay=true")
 
 	case "vmess":
 		head = fmt.Sprintf("vmess, %s, %d, username=%s", host, ext.Port, ext.UUID)
@@ -219,6 +225,7 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 	case "socks":
 		// 与 Shadowrocket 一致：用户名为 UUID，密码取 Password
 		head = fmt.Sprintf("socks5, %s, %d, %s, %s", host, ext.Port, ext.UUID, ext.Password)
+		kv = append(kv, "udp-relay=true")
 
 	case "vless", "naive":
 		return ""
