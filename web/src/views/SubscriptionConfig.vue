@@ -2038,7 +2038,7 @@ const getDefaultSingBoxConfig = (): SingBoxConfig => ({
       storeRdrc: true,
       externalController: '0.0.0.0:9090',
       externalUi: 'dashboard',
-      externalUiDownloadUrl: 'https://ghfast.top/https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip',
+      externalUiDownloadUrl: 'https://v6.gh-proxy.org/https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip',
       externalUiHttpClient: 'sources_downloader',
       defaultMode: 'rule',
       urltestUnifiedDelay: true,

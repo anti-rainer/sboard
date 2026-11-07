@@ -283,7 +283,7 @@
                 <div class="mb-3">
                   <label class="form-label">首选加速前缀</label>
                   <input type="text" class="form-control" v-model="agentUpdateSettings.proxy"
-                         placeholder="https://ghfast.top/">
+                         placeholder="https://v6.gh-proxy.org/">
                   <div class="form-text">下载 GitHub 资源的前缀，留空表示直连。</div>
                 </div>
 

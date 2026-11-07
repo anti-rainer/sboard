@@ -4,18 +4,17 @@
 # 自动检测平台并下载执行对应的安装脚本
 #
 # 用法:
-#   curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
+#   curl -fsSL https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
 
 set -e
 
 # GitHub 配置
 # 加速域名候选，按顺序尝试，全部失败后直连 GitHub
 GH_PROXIES=(
-    "https://ghfast.top/"
     "https://v6.gh-proxy.org/"
-    ""
+    ""                      # 空字符串表示直连 GitHub
 )
-GH_PROXY="https://ghfast.top/"
+GH_PROXY="https://v6.gh-proxy.org/"
 
 # download_script <dest>
 # 依次用各加速前缀下载引导脚本

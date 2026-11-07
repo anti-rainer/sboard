@@ -177,7 +177,7 @@ type SelfUpdateData struct {
 	Repo string `json:"repo"`
 	// ReleaseType 为 "latest/download" 或 "download/pre-release"
 	ReleaseType string `json:"release_type,omitempty"`
-	// Proxy 加速前缀，如 "https://ghfast.top/"；留空表示直连 GitHub
+	// Proxy 加速前缀，如 "https://v6.gh-proxy.org/"；留空表示直连 GitHub
 	Proxy string `json:"proxy,omitempty"`
 	// FallbackProxies 加速失败时依次尝试的前缀
 	FallbackProxies []string `json:"fallback_proxies,omitempty"`

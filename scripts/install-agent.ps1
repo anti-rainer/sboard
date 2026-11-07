@@ -38,7 +38,7 @@ $DEV_DOMAIN_HASH = "9de17c968ada26abec13fc5fc264ddfa"
 $script:DEV_MODE = $false
 
 # GitHub 加速配置 (国内加速)
-$GH_PROXY = "https://ghfast.top/"
+$GH_PROXY = "https://v6.gh-proxy.org/"
 
 # 颜色输出函数
 function Write-Info { Write-Host "[INFO] $args" -ForegroundColor Cyan }

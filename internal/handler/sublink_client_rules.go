@@ -23,7 +23,7 @@ import (
 // 实测各加速域名的可靠性（cn.list 2.8MB × 3 次）：
 //
 //	gh-proxy.org / v6.gh-proxy.org / cdn.gh-proxy.org   全部成功、字节数精确
-//	ghfast.top        多次失败或返回截断内容
+//	v6.gh-proxy.org        多次失败或返回截断内容
 //	ghproxy.net       返回截断内容（1MB 左右就断）
 //	cdn.jsdelivr.net  仓库分支超 50MB 时 403（Package size exceeded）
 //

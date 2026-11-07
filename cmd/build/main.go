@@ -20,7 +20,7 @@ import (
 // GitHub 加速代理列表（按顺序回退）
 var ghProxies = []string{
 	"",                    // 直接下载
-	"https://ghfast.top/", // 加速代理
+	"https://v6.gh-proxy.org/", // 加速代理
 }
 
 // 嵌入目录

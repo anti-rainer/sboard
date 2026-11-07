@@ -1354,7 +1354,7 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 // 这样仓库转移或加速域名失效时不需要重新编译 agent。
 const (
 	fallbackUpdateRepo = "anti-rainer/sboard"
-	fallbackUpdateProxy = "https://ghfast.top/"
+	fallbackUpdateProxy = "https://v6.gh-proxy.org/"
 )
 
 // handleCertUpdate 处理证书刷新指令（单向通知，不回传结果）。

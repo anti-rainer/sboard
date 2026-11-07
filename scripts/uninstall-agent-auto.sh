@@ -19,7 +19,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # GitHub 加速
-GH_PROXY="https://ghfast.top/"
+GH_PROXY="https://v6.gh-proxy.org/"
 REPO_URL="https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts"
 
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }

@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/ins
 
 国内加速：
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
+curl -fsSL https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell 管理员):**
@@ -43,7 +43,7 @@ irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sb
 
 国内加速：
 ```powershell
-irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
+irm https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
 ```
 
 ### Agent 安装
@@ -61,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uni
 
 国内加速：
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent-auto.sh | bash
+curl -fsSL https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent-auto.sh | bash
 ```
 
 **Windows (PowerShell 管理员):**
@@ -73,7 +73,7 @@ irm https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-
 
 国内加速：
 ```powershell
-irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex
+irm https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/uninstall-agent.ps1 | iex
 ```
 
 ## 服务管理

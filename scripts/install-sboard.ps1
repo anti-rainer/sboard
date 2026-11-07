@@ -7,7 +7,7 @@
 #     .\install-sboard.ps1
 #
 #   方式2: 通过管道安装
-#     irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
+#     irm https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 | iex
 #
 #   方式3: 带参数运行
 #     .\install-sboard.ps1 -Install -Port 9000 -User admin -Pass mypassword
@@ -59,7 +59,7 @@ $DEV_DOMAIN_HASH = "9de17c968ada26abec13fc5fc264ddfa"
 $script:DEV_MODE = $false
 
 # GitHub 加速配置 (国内加速)
-$GH_PROXY = "https://ghfast.top/"
+$GH_PROXY = "https://v6.gh-proxy.org/"
 
 # 颜色输出函数
 function Write-Info { Write-Host "[INFO] $args" -ForegroundColor Cyan }
@@ -539,13 +539,13 @@ function Get-SboardLogs {
 
 function Update-Sboard {
     Write-Host "正在更新 SBoard..." -ForegroundColor Cyan
-    irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
+    irm https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
     & "$env:TEMP\install-sboard.ps1" -Update
 }
 
 function Uninstall-Sboard {
     Write-Host "正在卸载 SBoard..." -ForegroundColor Cyan
-    irm https://ghfast.top/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
+    irm https://v6.gh-proxy.org/https://raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.ps1 -OutFile "$env:TEMP\install-sboard.ps1"
     & "$env:TEMP\install-sboard.ps1" -Uninstall
 }
 

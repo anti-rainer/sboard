@@ -38,10 +38,9 @@ DEV_DOMAIN_HASH="9de17c968ada26abec13fc5fc264ddfa"
 
 # GitHub 加速配置 (国内加速)
 # 加速域名候选。单一域名可能在某些网络下解析失败或不可达
-# （实测生产机的 DNS 解析不了 ghfast.top），所以按顺序尝试，全部失败后直连。
-GH_PROXY="https://ghfast.top/"
+# （实测生产机的 DNS 解析不了 v6.gh-proxy.org），所以按顺序尝试，全部失败后直连。
+GH_PROXY="https://v6.gh-proxy.org/"
 GH_PROXIES=(
-    "https://ghfast.top/"
     "https://v6.gh-proxy.org/"
     ""                      # 空字符串表示直连 GitHub
 )
@@ -873,12 +872,12 @@ do_logs() {
 }
 
 # 引导脚本下载：多加速源依次尝试，全部失败后直连 GitHub。
-# 单一域名（如 ghfast.top）在部分网络下会解析失败，不能硬编码一次就放弃。
+# 单一域名（如 v6.gh-proxy.org）在部分网络下会解析失败，不能硬编码一次就放弃。
 fetch_install_script() {
     local dest="$1"
     local rel="raw.githubusercontent.com/anti-rainer/sboard/main/scripts/install-sboard.sh"
     local proxy url
-    for proxy in "https://ghfast.top/" "https://v6.gh-proxy.org/" ""; do
+    for proxy in "https://v6.gh-proxy.org/" ""; do
         if [[ -n "$proxy" ]]; then
             url="${proxy}https://${rel}"
         else

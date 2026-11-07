@@ -31,11 +31,11 @@ CONFIG_FILE="agent.json"
 # GitHub 加速配置 (国内加速)
 # 可通过 --gh-proxy 参数修改，设为 0 或 direct 禁用加速
 # 支持的加速地址格式:
-#   - https://ghfast.top/ (默认，稳定)
-#   - https://ghfast.top/
+#   - https://v6.gh-proxy.org/ (默认，稳定)
+#   - https://v6.gh-proxy.org/
 #   - https://gh-proxy.com/
 #   - 设为 0 禁用加速直连 GitHub
-GH_PROXY="https://ghfast.top/"
+GH_PROXY="https://v6.gh-proxy.org/"
 
 # 开发者模式 (使用预发布版本)
 DEV_MODE="false"
@@ -82,14 +82,14 @@ show_help() {
     echo "  --token <token>     Agent 认证 Token (必填)"
     echo "  --panel <url>       面板地址 (必填)"
     echo "  --gh-proxy <url>    GitHub 加速地址 (可选，用于下载加速)"
-    echo "                      格式: https://ghfast.top/ 或 https://cdn.jsdelivr.net/"
+    echo "                      格式: https://v6.gh-proxy.org/ 或 https://cdn.jsdelivr.net/"
     echo "                      设为 0 或 direct 禁用加速直连 GitHub"
     echo "  --uninstall         卸载 Agent"
     echo "  -h, --help          显示帮助"
     echo ""
     echo "示例:"
     echo "  $0 --token abc123 --panel https://panel.example.com"
-    echo "  $0 --token abc123 --panel https://panel.example.com --gh-proxy https://ghfast.top/"
+    echo "  $0 --token abc123 --panel https://panel.example.com --gh-proxy https://v6.gh-proxy.org/"
     echo "  $0 --token abc123 --panel https://panel.example.com --gh-proxy 0    # 禁用加速"
     echo "  $0 --uninstall"
     echo ""
@@ -430,7 +430,7 @@ download_agent() {
         if [[ -n "$GH_PROXY" ]]; then
             error "下载失败，请尝试更换加速地址 (--gh-proxy) 或直连 GitHub (--gh-proxy 0)"
         else
-            error "下载失败，请检查网络或尝试使用加速 (--gh-proxy https://ghfast.top/)"
+            error "下载失败，请检查网络或尝试使用加速 (--gh-proxy https://v6.gh-proxy.org/)"
         fi
     fi
     info "下载成功"

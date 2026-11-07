@@ -1013,7 +1013,7 @@ func (s *Server) handleDeployAll(c *gin.Context) {
 //	update_fallbacks 逗号分隔的回退加速前缀
 const (
 	defaultUpdateRepo  = "anti-rainer/sboard"
-	defaultUpdateProxy = "https://ghfast.top/"
+	defaultUpdateProxy = "https://v6.gh-proxy.org/"
 )
 
 // buildSelfUpdateData 组装下发给 Agent 的自我更新参数。

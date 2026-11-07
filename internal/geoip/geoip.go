@@ -16,7 +16,7 @@ import (
 
 // GeoIP 数据库下载地址 (使用 Loyalsoldier 维护的版本，每日更新)
 const (
-	GeoIPURL = "https://ghfast.top/https://github.com/Loyalsoldier/geoip/releases/latest/download/Country.mmdb"
+	GeoIPURL = "https://v6.gh-proxy.org/https://github.com/Loyalsoldier/geoip/releases/latest/download/Country.mmdb"
 	// 备用地址
 	GeoIPURLBackup = "https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb"
 )
