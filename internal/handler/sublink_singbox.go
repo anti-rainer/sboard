@@ -637,7 +637,7 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 			outbound["transport"] = buildSingBoxTransport(node)
 		}
 		if node.TlsEnabled {
-			outbound["tls"] = buildSingBoxTLS(node)
+			outbound["tls"] = buildSingBoxTLS(node, true)
 		}
 
 	case "vless":
@@ -650,7 +650,7 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 			outbound["transport"] = buildSingBoxTransport(node)
 		}
 		if node.TlsEnabled || node.RealityEnabled {
-			outbound["tls"] = buildSingBoxTLS(node)
+			outbound["tls"] = buildSingBoxTLS(node, true)
 		}
 
 	case "trojan":
@@ -659,7 +659,7 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		if node.TransportEnabled && node.TransportType != "" && node.TransportType != "tcp" {
 			outbound["transport"] = buildSingBoxTransport(node)
 		}
-		outbound["tls"] = buildSingBoxTLS(node)
+		outbound["tls"] = buildSingBoxTLS(node, true)
 
 	case "shadowsocks":
 		outbound["type"] = "shadowsocks"
@@ -680,7 +680,7 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		if node.Hy2DownMbps > 0 {
 			outbound["down_mbps"] = node.Hy2DownMbps
 		}
-		hy2TLS := buildSingBoxTLS(node)
+		hy2TLS := buildSingBoxTLS(node, false) // QUIC：不能带 uTLS
 		hy2TLS["alpn"] = []string{"h3"}
 		outbound["tls"] = hy2TLS
 		if node.Hy2Obfs != "" {
@@ -693,7 +693,8 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 	case "anytls":
 		outbound["type"] = "anytls"
 		outbound["password"] = p.UUID
-		outbound["tls"] = buildSingBoxTLS(node)
+		// anytls 走 QUIC，同样不支持 uTLS
+		outbound["tls"] = buildSingBoxTLS(node, false)
 
 	case "tuic":
 		outbound["type"] = "tuic"
@@ -709,7 +710,7 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		}
 		outbound["congestion_control"] = congestion
 		outbound["udp_relay_mode"] = "native"
-		tuicTLS := buildSingBoxTLS(node)
+		tuicTLS := buildSingBoxTLS(node, false) // QUIC：不能带 uTLS
 		tuicTLS["alpn"] = []string{"h3"}
 		outbound["tls"] = tuicTLS
 
@@ -741,8 +742,14 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 	return outbound
 }
 
-// buildSingBoxTLS 构建 sing-box TLS 配置
-func buildSingBoxTLS(node *database.InboundNode) map[string]interface{} {
+// buildSingBoxTLS 构建 sing-box TLS 配置。
+//
+// allowUTLS=false 用于 QUIC 系协议（hysteria2 / tuic / anytls）：它们跑在
+// UDP 上，sing-box 的 uTLS 只实现于 TLS-over-TCP，带上去会在拨号时报
+//   ERROR: open connection to xxx:443 using outbound/hysteria2[x]:
+//          unsupported usage for uTLS
+// 节点看起来配置正常、sing-box 也能启动，但所有请求都失败。
+func buildSingBoxTLS(node *database.InboundNode, allowUTLS bool) map[string]interface{} {
 	tls := map[string]interface{}{
 		"enabled":  true,
 		"insecure": true,
@@ -761,9 +768,11 @@ func buildSingBoxTLS(node *database.InboundNode) map[string]interface{} {
 			"short_id":   node.RealityShortId,
 		}
 	}
-	tls["utls"] = map[string]interface{}{
-		"enabled":     true,
-		"fingerprint": "chrome",
+	if allowUTLS {
+		tls["utls"] = map[string]interface{}{
+			"enabled":     true,
+			"fingerprint": "chrome",
+		}
 	}
 	return tls
 }
@@ -806,8 +815,9 @@ func buildSingBoxTransport(node *database.InboundNode) map[string]interface{} {
 	return transport
 }
 
-// buildSingBoxTLSExt 构建外部节点的 sing-box TLS 配置
-func buildSingBoxTLSExt(ext *database.ExternalNode) map[string]interface{} {
+// buildSingBoxTLSExt 构建外部节点的 sing-box TLS 配置。
+// allowUTLS 的语义同 buildSingBoxTLS：QUIC 系协议必须传 false。
+func buildSingBoxTLSExt(ext *database.ExternalNode, allowUTLS bool) map[string]interface{} {
 	tls := map[string]interface{}{
 		"enabled":  true,
 		"insecure": true,
@@ -822,9 +832,11 @@ func buildSingBoxTLSExt(ext *database.ExternalNode) map[string]interface{} {
 			"short_id":   ext.RealityShortId,
 		}
 	}
-	tls["utls"] = map[string]interface{}{
-		"enabled":     true,
-		"fingerprint": "chrome",
+	if allowUTLS {
+		tls["utls"] = map[string]interface{}{
+			"enabled":     true,
+			"fingerprint": "chrome",
+		}
 	}
 	return tls
 }
@@ -842,7 +854,7 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 	case "trojan":
 		outbound["password"] = ext.UUID
 		if ext.TlsEnabled || ext.RealityEnabled {
-			outbound["tls"] = buildSingBoxTLSExt(ext)
+			outbound["tls"] = buildSingBoxTLSExt(ext, true)
 		}
 		if ext.TransportEnabled && ext.TransportType == "ws" {
 			transport := map[string]interface{}{"type": "ws"}
@@ -860,14 +872,14 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 			outbound["flow"] = ext.Flow
 		}
 		if ext.TlsEnabled || ext.RealityEnabled {
-			outbound["tls"] = buildSingBoxTLSExt(ext)
+			outbound["tls"] = buildSingBoxTLSExt(ext, true)
 		}
 	case "vmess":
 		outbound["uuid"] = ext.UUID
 		outbound["security"] = "auto"
 		outbound["alter_id"] = 0
 		if ext.TlsEnabled {
-			outbound["tls"] = buildSingBoxTLSExt(ext)
+			outbound["tls"] = buildSingBoxTLSExt(ext, true)
 		}
 		if ext.TransportEnabled && ext.TransportType == "ws" {
 			transport := map[string]interface{}{"type": "ws"}
@@ -890,7 +902,7 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 		if ext.Hy2DownMbps > 0 {
 			outbound["down_mbps"] = ext.Hy2DownMbps
 		}
-		extHy2TLS := buildSingBoxTLSExt(ext)
+		extHy2TLS := buildSingBoxTLSExt(ext, false) // QUIC
 		extHy2TLS["alpn"] = []string{"h3"}
 		outbound["tls"] = extHy2TLS
 		if ext.Hy2Obfs != "" {
@@ -902,7 +914,7 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 	case "anytls":
 		outbound["password"] = ext.UUID
 		if ext.TlsEnabled {
-			outbound["tls"] = buildSingBoxTLSExt(ext)
+			outbound["tls"] = buildSingBoxTLSExt(ext, true)
 		}
 	case "tuic":
 		outbound["uuid"] = ext.UUID
@@ -917,7 +929,7 @@ func buildSingBoxOutboundFromExternal(ext *database.ExternalNode) SingBoxOutboun
 			relay = "native"
 		}
 		outbound["udp_relay_mode"] = relay
-		extTuicTLS := buildSingBoxTLSExt(ext)
+		extTuicTLS := buildSingBoxTLSExt(ext, false) // QUIC
 		extTuicTLS["alpn"] = []string{"h3"}
 		outbound["tls"] = extTuicTLS
 	case "socks":
