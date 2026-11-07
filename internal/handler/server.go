@@ -5,6 +5,8 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sboard-go/sboard/internal/config"
@@ -17,6 +19,8 @@ type Server struct {
 	router     *gin.Engine
 	frontendFS embed.FS
 	httpServer *http.Server
+	// buildTime 进程启动时间，用于静态资源的 Last-Modified
+	buildTime time.Time
 }
 
 // NewServer 创建新的服务器实例
@@ -43,6 +47,7 @@ func NewServer(cfg *config.Config, frontendFS embed.FS) *Server {
 		config:     cfg,
 		router:     router,
 		frontendFS: frontendFS,
+		buildTime:  time.Now(),
 	}
 
 	s.setupRoutes()
@@ -185,6 +190,10 @@ func (s *Server) setupRoutes() {
 	// 末段文件名只为客户端识别后缀，服务端按 <client> 段决定输出。
 	s.router.GET("/subscribe/:uuid/:node/:client/:file", s.handleSubByPath)
 
+	// 版本信息（无需认证）：前端据此判断服务端是否已更新，
+	// 用于对冲 CDN 缓存旧前端造成的「更新后仍是老界面」问题。
+	s.router.GET("/api/version", s.handleVersionInfo)
+
 	// Agent WebSocket 端点（使用 token 认证）
 	s.router.GET("/api/agent/ws", s.handleAgentWebSocket)
 
@@ -212,22 +221,26 @@ func (s *Server) serveFrontend() {
 		return
 	}
 
-	// 提供 assets 静态文件
-	assetsFS, _ := fs.Sub(webFS, "assets")
-	s.router.StaticFS("/assets", http.FS(assetsFS))
+	// /assets 静态资源：文件名带内容 hash，长缓存；未命中返回 404
+	// （绝不回退 index.html —— 否则 CDN 会把 HTML 当成 CSS/JS 缓存住）
+	//
+	// GET 与 HEAD 用 Match 一次注册：CDN 常用 HEAD 探测资源，
+	// 只注册 GET 会让 HEAD 落到 404，反而让 CDN 判定「资源不存在」。
+	assetsHandler := s.serveAssets(webFS)
+	s.router.Match([]string{http.MethodGet, http.MethodHead}, "/assets/*filepath", assetsHandler)
 
-	// SPA 回退
+	// SPA 回退：index.html 强制不缓存，保证拿到的总是最新资源清单
+	indexHandler := s.serveIndex(webFS)
+	s.router.Match([]string{http.MethodGet, http.MethodHead}, "/", indexHandler)
 	s.router.NoRoute(func(c *gin.Context) {
-		// 尝试提供 index.html
-		data, err := fs.ReadFile(webFS, "index.html")
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"message": "SBoard API Server",
-				"version": "3.0.0",
-			})
+		// API 与订阅路径不走 SPA 回退，避免掩盖真实的 404
+		p := c.Request.URL.Path
+		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/subscribe/") ||
+			strings.HasPrefix(p, "/assets/") {
+			c.Status(http.StatusNotFound)
 			return
 		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		indexHandler(c)
 	})
 }
 

@@ -494,6 +494,11 @@ type Server struct {
 	AgentID       string     `gorm:"size:100" json:"agent_id"`          // Agent 唯一标识
 	AgentVersion  string     `gorm:"size:20" json:"agent_version"`      // Agent 版本
 	AgentOnline   bool       `gorm:"default:false" json:"agent_online"` // Agent 是否在线
+	// AgentHash 是 agent 上报的自身二进制 sha256。版本号不足以证明「跑的是哪一份」
+	// ——预发布版与正式版可能都报 v1.0.6，只有 hash 能区分。
+	AgentHash string `gorm:"size:64" json:"agent_hash"`
+	// AgentBuiltAt agent 二进制的文件修改时间（RFC3339），用于判断更新是否落地。
+	AgentBuiltAt string `gorm:"size:32" json:"agent_built_at"`
 	LastHeartbeat *time.Time `json:"last_heartbeat"`                    // 最后心跳时间
 
 	// 服务器状态 (Agent 上报)

@@ -295,6 +295,17 @@ func (h *AgentHub) flushServerMetrics(serverID uint, data *agent.HeartbeatData) 
 	if data.LocalIPv6 != "" {
 		updates["host_ipv6"] = data.LocalIPv6
 	}
+	// Agent 上报的版本与二进制指纹：落库后前端可直接看到每台机器
+	// 实际运行的是哪一份二进制，不必登录 VPS 手工 sha256sum。
+	if data.AgentVersion != "" {
+		updates["agent_version"] = data.AgentVersion
+	}
+	if data.AgentHash != "" && len(data.AgentHash) == 64 {
+		updates["agent_hash"] = data.AgentHash
+	}
+	if data.AgentBuiltAt != "" {
+		updates["agent_built_at"] = data.AgentBuiltAt
+	}
 	database.GetDB().Model(&database.Server{}).Where("id = ?", serverID).Updates(updates)
 
 	// 累加月度流量（使用精确差值）

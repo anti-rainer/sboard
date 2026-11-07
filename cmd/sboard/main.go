@@ -136,6 +136,9 @@ func main() {
 	sched.SetCertRefreshCallback(handler.BroadcastCertUpdate)
 	sched.Start()
 
+	// 把版本号透传给 handler，供 /api/version 返回给前端做更新检测
+	handler.SetVersion(Version)
+
 	// 创建 HTTP 服务器
 	server := handler.NewServer(cfg, frontendFS)
 

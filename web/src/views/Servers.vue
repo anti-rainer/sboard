@@ -66,6 +66,15 @@
             <div v-if="server.host_ipv6" class="server-host">
               <i class="bi bi-hdd-stack"></i> {{ maskIP(server.host_ipv6) }}
             </div>
+            <!-- Agent 版本与二进制指纹：确认「跑的是哪一份」，仅版本号不够 -->
+            <div v-if="server.agent_hash" class="server-host sb-agent-hash"
+                 :title="`sha256: ${server.agent_hash}\n路径: ${server.agent_path || '-'}\n构建时间: ${server.agent_built_at || '-'}`">
+              <i class="bi bi-fingerprint"></i>
+              <span class="sb-agent-ver">{{ server.agent_version || '-' }}</span>
+              <code class="sb-hash-short" @click="copyHash(server.agent_hash)">{{ server.agent_hash.slice(0, 12) }}</code>
+              <span v-if="hashMismatch(server)" class="badge bg-warning"
+                    title="hash 与多数机器不一致，可能未更新">版本不一致</span>
+            </div>
           </div>
           
           <!-- 实时监控数据 -->
@@ -1754,6 +1763,38 @@ async function copyToClipboard(text: string) {
     textarea.select()
     document.execCommand('copy')
     document.body.removeChild(textarea)
+  }
+}
+
+/** 多数机器共用的 agent hash：用于识别「落单」的机器 */
+const majorityHash = computed(() => {
+  const counts = new Map<string, number>()
+  for (const s of servers.value) {
+    if (!s.agent_hash || !s.agent_online) continue
+    counts.set(s.agent_hash, (counts.get(s.agent_hash) || 0) + 1)
+  }
+  let best = ''
+  let bestN = 0
+  for (const [h, n] of counts) {
+    if (n > bestN) { best = h; bestN = n }
+  }
+  return best
+})
+
+/** 该机器的 hash 是否与多数派不同（说明它可能没更新到位） */
+function hashMismatch(server: ServerWithState): boolean {
+  if (!server.agent_hash || !majorityHash.value) return false
+  return server.agent_hash !== majorityHash.value
+}
+
+/** 复制完整 hash，方便与发布产物比对 */
+async function copyHash(hash?: string) {
+  if (!hash) return
+  try {
+    await copyToClipboard(hash)
+    showToast('success', '成功', 'sha256 已复制')
+  } catch {
+    showToast('error', '错误', '复制失败')
   }
 }
 

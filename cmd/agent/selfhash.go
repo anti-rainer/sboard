@@ -1,0 +1,110 @@
+package main
+
+// 自身二进制指纹：用于面板确认各 VPS 上的 agent 是否真的更新到位。
+//
+// 只看版本号不够——版本号是编译时 -ldflags 注入的字符串，预发布版和正式版
+// 可能报同一个 "v1.0.6"，而实际二进制完全不同。sha256 才能证明「跑的是哪一个」。
+//
+// 计算时机：启动时算一次并缓存。agent 的自我更新会替换二进制文件后重启进程，
+// 所以缓存值天然对应「当前正在运行的这份文件」；反过来，如果文件在进程运行期间
+// 被外部替换（比如手工 scp 覆盖），缓存值会变成旧文件的 hash，因此额外记录文件
+// 的 mtime/size，两者任一变化就重新计算。
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+var (
+	selfHashMu      sync.Mutex
+	selfHashValue   string
+	selfHashPath    string
+	selfHashMtime   time.Time
+	selfHashSize    int64
+	selfHashBuiltAt string
+)
+
+// selfExecutablePath 返回当前进程的可执行文件路径（解析符号链接）。
+func selfExecutablePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		return resolved
+	}
+	return exe
+}
+
+// fileSHA256 计算文件 sha256，小写十六进制。
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// selfBinaryHash 返回当前 agent 二进制的 sha256。
+//
+// 文件 mtime 或大小变化会触发重算（外部替换文件的场景）；
+// 正常情况下只在首次调用时算一次，避免每个心跳都读 100MB 二进制。
+func selfBinaryHash() string {
+	path := selfExecutablePath()
+	if path == "" {
+		return ""
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+
+	selfHashMu.Lock()
+	defer selfHashMu.Unlock()
+
+	// 命中缓存：同一路径、同样的大小与 mtime
+	if selfHashValue != "" && selfHashPath == path &&
+		selfHashSize == info.Size() && selfHashMtime.Equal(info.ModTime()) {
+		return selfHashValue
+	}
+
+	sum, err := fileSHA256(path)
+	if err != nil {
+		// 算不出来时返回空，面板会显示「未知」而不是卡住心跳
+		return selfHashValue
+	}
+
+	selfHashValue = sum
+	selfHashPath = path
+	selfHashSize = info.Size()
+	selfHashMtime = info.ModTime()
+	selfHashBuiltAt = info.ModTime().UTC().Format(time.RFC3339)
+	return selfHashValue
+}
+
+// selfBinaryInfo 一次性返回 hash / 路径 / 构建时间 / 大小，打包进心跳。
+func selfBinaryInfo() map[string]interface{} {
+	hash := selfBinaryHash()
+
+	selfHashMu.Lock()
+	info := map[string]interface{}{
+		"agent_hash":     hash,
+		"agent_path":     selfHashPath,
+		"agent_built_at": selfHashBuiltAt,
+		"agent_size":     selfHashSize,
+	}
+	selfHashMu.Unlock()
+	return info
+}

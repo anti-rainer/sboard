@@ -481,6 +481,13 @@ func (a *Agent) sendHeartbeat() error {
 		"net_in_transfer":  totalBytesRecv, // bytes (持久化的累计流量)
 		"net_out_transfer": totalBytesSent, // bytes (持久化的累计流量)
 		"connections":      0,
+		// 版本与自身二进制指纹：面板据此确认 agent 是否真的更新到位。
+		// 只报版本号不够——预发布版与正式版可能都是 v1.0.6，
+		// sha256 才能证明跑的是哪一份。
+		"agent_version": Version,
+	}
+	for k, v := range selfBinaryInfo() {
+		data[k] = v
 	}
 
 	rawData, _ := json.Marshal(data)

@@ -74,6 +74,17 @@
       </div>
     </div>
 
+    <!-- 版本更新提示：服务端已发布新版本时出现 -->
+    <div v-if="updateAvailable" class="sb-update-bar" role="alert">
+      <i class="bi bi-arrow-repeat"></i>
+      <span class="sb-update-text">
+        面板已更新到新版本<span v-if="serverVersion" class="sb-update-ver">（{{ serverVersion }}）</span>，
+        当前页面可能仍是旧资源
+      </span>
+      <button class="btn btn-sm btn-primary" @click="reloadToUpdate">立即刷新</button>
+      <button class="btn btn-sm btn-link" @click="dismissUpdate" title="稍后再说">稍后</button>
+    </div>
+
     <!-- 账户设置模态框 -->
     <div class="modal fade" id="accountModal" tabindex="-1" ref="accountModalEl">
       <div class="modal-dialog modal-lg">
@@ -301,6 +312,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick, provide } from 'vue'
+import { startVersionWatch, updateAvailable, reloadToUpdate as doReload } from './utils/versionWatch'
 import { useRouter, useRoute } from 'vue-router'
 import { Modal, Toast } from 'bootstrap'
 import { logout as apiLogout, changeUsername, changePassword, getOAuthProvidersAdmin, saveOAuthProvider, saveOAuthSettings, getGitHubLoginUrl, getSettings, saveSettings } from './api'
@@ -599,7 +611,27 @@ const handleOAuthCallback = () => {
   }
 }
 
+/** 服务端版本号（用于提示文案） */
+const serverVersion = ref('')
+/** 用户点了「稍后」后本轮不再打扰 */
+const updateDismissed = ref(false)
+
+function dismissUpdate() {
+  updateDismissed.value = true
+  updateAvailable.value = false
+}
+
+function reloadToUpdate() {
+  doReload()
+}
+
 onMounted(() => {
+  // 版本自检：对付 CDN 缓存旧前端（CF 边缘节点可能仍持有旧 index.html）
+  startVersionWatch()
+  fetch('/api/version', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((info) => { if (info?.version) serverVersion.value = info.version })
+    .catch(() => {})
   // 处理 OAuth 登录回调
   handleOAuthCallback()
   

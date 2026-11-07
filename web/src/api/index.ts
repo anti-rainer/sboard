@@ -251,6 +251,10 @@ export interface Server {
   agent_token: string
   agent_id: string
   agent_version: string
+  /** agent 二进制 sha256，用于确认各机器实际运行的版本 */
+  agent_hash?: string
+  /** agent 二进制文件修改时间（RFC3339） */
+  agent_built_at?: string
   agent_online: boolean
   last_heartbeat: string
   cpu_usage: number

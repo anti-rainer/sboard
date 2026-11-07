@@ -59,6 +59,12 @@ type HeartbeatData struct {
 	NetInTransfer  uint64  `json:"net_in_transfer"`  // 系统启动以来的入流量总量(bytes)
 	NetOutTransfer uint64  `json:"net_out_transfer"` // 系统启动以来的出流量总量(bytes)
 	Connections    int     `json:"connections"`      // 当前连接数
+	// Agent 版本与自身二进制指纹
+	AgentVersion string `json:"agent_version,omitempty"`
+	AgentHash    string `json:"agent_hash,omitempty"`
+	AgentPath    string `json:"agent_path,omitempty"`
+	AgentBuiltAt string `json:"agent_built_at,omitempty"`
+	AgentSize    int64  `json:"agent_size,omitempty"`
 	LocalIP        string  `json:"local_ip"`         // 本机 IPv4
 	LocalIPv6      string  `json:"local_ip_v6"`      // 本机 IPv6
 }

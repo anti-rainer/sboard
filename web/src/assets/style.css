@@ -1400,6 +1400,73 @@ pre code {
   .sb-card-grid { grid-template-columns: 1fr; }
 }
 
+/* 版本更新提示条：服务端已发布新版本时出现 */
+.sb-update-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 1rem;
+  z-index: 1080;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.6rem 0.9rem;
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-accent);
+  border-radius: var(--sb-radius-lg);
+  box-shadow: var(--sb-shadow-lg);
+  font-size: 0.85rem;
+}
+
+.sb-update-bar > i { color: var(--sb-accent); font-size: 1rem; }
+.sb-update-text { color: var(--sb-text); }
+.sb-update-ver { color: var(--sb-text-muted); }
+
+@media (max-width: 768px) {
+  .sb-update-bar {
+    left: 0.5rem;
+    right: 0.5rem;
+    transform: none;
+    max-width: none;
+    flex-wrap: wrap;
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  }
+  .sb-update-text { flex: 1 1 100%; }
+}
+
+/* Agent 版本与二进制指纹 */
+.sb-agent-hash {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+
+.sb-agent-ver {
+  color: var(--sb-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-hash-short {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: var(--sb-surface-3);
+  border: 1px solid var(--sb-border);
+  color: var(--sb-text-muted);
+  cursor: pointer;
+  transition: color var(--sb-dur) var(--sb-ease),
+              border-color var(--sb-dur) var(--sb-ease);
+}
+
+.sb-hash-short:hover {
+  color: var(--sb-accent);
+  border-color: var(--sb-accent);
+}
+
 /* ---------- 移动端 ---------- */
 @media (max-width: 991.98px) {
   .navbar-collapse {
