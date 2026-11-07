@@ -73,7 +73,7 @@ func buildShadowrocketProxyLine(name, host string, port int, node *database.Inbo
 	case "shadowsocks":
 		method := node.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		head = fmt.Sprintf("ss, %s, %d, password=%s, method=%s", host, port, getSS2022Password(node, uuid), method)
 
@@ -210,7 +210,7 @@ func buildShadowrocketProxyLineFromExternal(name, host string, ext *database.Ext
 	case "shadowsocks":
 		method := ext.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		head = fmt.Sprintf("ss, %s, %d, password=%s, method=%s", host, ext.Port, ext.SsPassword, method)
 
@@ -346,7 +346,7 @@ func buildLoonProxyLine(name, host string, port int, node *database.InboundNode,
 	case "shadowsocks":
 		method := node.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		parts = []string{"Shadowsocks", host, fmt.Sprint(port), method, loonQuote(getSS2022Password(node, uuid))}
 		parts = append(parts, "udp=true")
@@ -466,7 +466,7 @@ func buildLoonProxyLineFromExternal(name, host string, ext *database.ExternalNod
 	case "shadowsocks":
 		method := ext.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		parts = []string{"Shadowsocks", host, fmt.Sprint(ext.Port), method, loonQuote(ext.SsPassword)}
 		parts = append(parts, "udp=true")

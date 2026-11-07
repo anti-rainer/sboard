@@ -263,12 +263,24 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 		req.RealityShortId = generateRandomShortId()
 	}
 
-	// Shadowsocks 协议：如果密码为空，根据加密方法自动生成正确格式的密码
-	if req.Protocol == "shadowsocks" && req.SsPassword == "" {
+	// Shadowsocks 协议：密码为空时按加密方法生成；填了但与 method 要求的
+	// 密钥长度不符时，同样重新生成——否则客户端会因 bad key length 直接崩，
+	// 而面板上看不出问题。
+	if req.Protocol == "shadowsocks" {
 		if req.SsMethod == "" {
-			req.SsMethod = "aes-256-gcm" // 默认方法
+			req.SsMethod = "2022-blake3-aes-256-gcm" // 默认：SS2022，32 字节密钥
 		}
-		req.SsPassword = generateSS2022Password(req.SsMethod)
+		if !isSupportedSSMethod(req.SsMethod) {
+			errorJSON(c, http.StatusBadRequest,
+				"Shadowsocks 仅支持 SS2022：2022-blake3-aes-128-gcm / "+
+					"2022-blake3-aes-256-gcm / 2022-blake3-chacha20-poly1305")
+			return
+		}
+		if req.SsPassword == "" {
+			req.SsPassword = generateSS2022Password(req.SsMethod)
+		} else if !ss2022KeyMatchesMethod(req.SsPassword, req.SsMethod) {
+			req.SsPassword = generateSS2022Password(req.SsMethod)
+		}
 	}
 
 	node := database.InboundNode{
@@ -525,7 +537,23 @@ func (s *Server) handleUpdateNode(c *gin.Context) {
 	if req.SsMethod != node.SsMethod {
 		configChanged = true
 	}
+	// 只接受 SS2022：传统加密无法按用户分发独立密钥
+	if node.Protocol == "shadowsocks" && req.SsMethod != "" && !isSupportedSSMethod(req.SsMethod) {
+		errorJSON(c, http.StatusBadRequest,
+			"Shadowsocks 仅支持 SS2022：2022-blake3-aes-128-gcm / "+
+				"2022-blake3-aes-256-gcm / 2022-blake3-chacha20-poly1305")
+		return
+	}
 	node.SsMethod = req.SsMethod
+	// 改加密方式不会自动换密钥，但 SS2022 的 key 长度随 method 固定
+	// （aes-128 要 16 字节、aes-256/chacha20 要 32 字节）。从 aes-256 改成
+	// aes-128 而沿用旧密钥时，客户端会直接崩溃：
+	//   cipher: 2022-blake3-aes-128-gcm initialize error:
+	//   bad key length, required 16, got 32
+	// 所以此处按新 method 重新生成主密钥。
+	if node.Protocol == "shadowsocks" && regenerateSS2022PasswordIfMismatch(&req.SsPassword, req.SsMethod) {
+		configChanged = true
+	}
 	if req.SsPassword != node.SsPassword {
 		configChanged = true
 	}
@@ -738,6 +766,60 @@ func generateRandomPassword(length int) string {
 		bytes[i] = chars[int(bytes[i])%len(chars)]
 	}
 	return string(bytes)
+}
+
+// supportedSSMethods 是入站节点管理允许的 Shadowsocks 加密方式。
+// 只保留 SS2022 三种：它们支持 EIH 多用户各自独立密钥，才能按用户下发订阅。
+// 传统加密（aes-128-gcm / aes-256-gcm / chacha20-ietf-poly1305 /
+// xchacha20-ietf-poly1305）是单密码全员共享，无法区分用户，已移除。
+var supportedSSMethods = map[string]bool{
+	"2022-blake3-aes-128-gcm":       true,
+	"2022-blake3-aes-256-gcm":       true,
+	"2022-blake3-chacha20-poly1305": true,
+}
+
+// isSupportedSSMethod 判断加密方式是否受支持
+func isSupportedSSMethod(method string) bool {
+	return supportedSSMethods[method]
+}
+
+// ss2022KeyLen 返回 SS2022 method 要求的密钥字节数；非 SS2022 返回 0
+func ss2022KeyLen(method string) int {
+	switch method {
+	case "2022-blake3-aes-128-gcm":
+		return 16
+	case "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305":
+		return 32
+	}
+	return 0
+}
+
+// ss2022KeyMatchesMethod 判断密码字节长度是否与 method 匹配。
+// 传统加密方式（aes-256-gcm 等）不校验长度，恒为 true。
+//
+// 不匹配时客户端会直接崩：mihomo 报
+//   cipher: 2022-blake3-aes-128-gcm initialize error: bad key length, required 16, got 32
+// 而 sing-box 同样拒绝启动，且面板侧从订阅文本上看不出任何异常。
+func ss2022KeyMatchesMethod(password, method string) bool {
+	want := ss2022KeyLen(method)
+	if want == 0 {
+		return true
+	}
+	raw, err := base64.StdEncoding.DecodeString(password)
+	if err != nil {
+		return false
+	}
+	return len(raw) == want
+}
+
+// regenerateSS2022PasswordIfMismatch 在 method 变更导致密钥长度不匹配时重新生成主密钥。
+// 返回是否发生了重新生成。
+func regenerateSS2022PasswordIfMismatch(password *string, method string) bool {
+	if ss2022KeyMatchesMethod(*password, method) {
+		return false
+	}
+	*password = generateSS2022Password(method)
+	return true
 }
 
 // generateSS2022Password 生成 Shadowsocks 2022 格式的密码（base64 编码的随机字节）

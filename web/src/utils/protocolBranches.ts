@@ -157,15 +157,14 @@ export const MAIN_PROTOCOLS: MainProtocolMeta[] = [
     id: 'shadowsocks',
     label: 'Shadowsocks',
     noTransport: true,
-    // SS 的分支维度就是加密方式本身（对齐 233boy 的 ss_method_list 全部 7 项）
+    // 只支持 SS2022 的三种 method。传统加密（aes-128-gcm / aes-256-gcm /
+    // chacha20-ietf-poly1305 / xchacha20-ietf-poly1305）用「单密码多人共享」，
+    // 无法给每个用户下发独立密钥，已整体移除，不再进入站节点管理。
+    // 密钥长度由 method 决定：aes-128 → 16 字节，其余两种 → 32 字节。
     branches: [
-      { id: 'aes-128-gcm', label: 'AES-128-GCM', hint: '传统加密，单用户共享密码', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-128-gcm' } },
-      { id: 'aes-256-gcm', label: 'AES-256-GCM', hint: '传统加密，单用户共享密码', patch: { tls: false, reality: false, transport: null, ssMethod: 'aes-256-gcm' } },
-      { id: 'chacha20-ietf-poly1305', label: 'ChaCha20-IETF', hint: '传统加密，ARM 设备友好', patch: { tls: false, reality: false, transport: null, ssMethod: 'chacha20-ietf-poly1305' } },
-      { id: 'xchacha20-ietf-poly1305', label: 'XChaCha20-IETF', hint: '传统加密，扩展 nonce', patch: { tls: false, reality: false, transport: null, ssMethod: 'xchacha20-ietf-poly1305' } },
-      { id: '2022-blake3-aes-128-gcm', label: '2022-AES128', hint: 'SS2022，支持多用户独立密钥', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-128-gcm' } },
-      { id: '2022-blake3-aes-256-gcm', label: '2022-AES256', hint: 'SS2022，支持多用户独立密钥', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-256-gcm' } },
-      { id: '2022-blake3-chacha20-poly1305', label: '2022-ChaCha20', hint: 'SS2022，ARM 优化', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-chacha20-poly1305' } },
+      { id: '2022-blake3-aes-128-gcm', label: '2022-AES128', hint: 'SS2022，16 字节密钥', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-128-gcm' } },
+      { id: '2022-blake3-aes-256-gcm', label: '2022-AES256', hint: 'SS2022，32 字节密钥（推荐）', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-256-gcm' } },
+      { id: '2022-blake3-chacha20-poly1305', label: '2022-ChaCha20', hint: 'SS2022，32 字节密钥，ARM 优化', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-chacha20-poly1305' } },
     ],
   },
   {

@@ -232,17 +232,9 @@
                 <div class="mb-2">
                   <label>加密方法 <span class="text-danger">*</span></label>
                   <select class="form-select" v-model="formData.ss_method">
-                    <optgroup label="SS2022（支持多用户独立密钥）">
-                      <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm (16字节密钥)</option>
-                      <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm (推荐，32字节密钥)</option>
-                      <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305 (ARM优化，32字节密钥)</option>
-                    </optgroup>
-                    <optgroup label="传统加密（单用户共享密码）">
-                      <option value="aes-128-gcm">aes-128-gcm</option>
-                      <option value="aes-256-gcm">aes-256-gcm</option>
-                      <option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</option>
-                      <option value="xchacha20-ietf-poly1305">xchacha20-ietf-poly1305</option>
-                    </optgroup>
+                    <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm（16 字节密钥）</option>
+                    <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm（32 字节，推荐）</option>
+                    <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305（32 字节，ARM 优化）</option>
                   </select>
                 </div>
 

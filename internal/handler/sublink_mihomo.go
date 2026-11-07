@@ -231,10 +231,23 @@ func buildMihomoProxy(server *database.Server, node *database.InboundNode, nc *d
 		add("port", p.Port)
 		add("password", password)
 		add("udp", true)
+		// Hysteria2 跑在 QUIC/H3 上，ALPN 必须是 h3；服务端 inbound 与
+		// sing-box/TUIC 三处都写了 alpn，这里此前漏了。
+		add("alpn", []string{"h3"})
 		buildMihomoTLSOpts(node, add, true)
 		if node.Hy2Obfs != "" {
 			add("obfs", node.Hy2Obfs)
 			add("obfs-password", node.Hy2ObfsPassword)
+		}
+		// 服务端设了 up_mbps/down_mbps 时必须同步下发，Brutal 需要两侧一致。
+		// 0 表示不限速，不写该键。
+		// 格式照 mihomo 官方示例写成 "100 Mbps" 字符串（纯数字也能解析，
+		// 但文档给的是带单位字符串，跟随文档）。
+		if node.Hy2UpMbps > 0 {
+			add("up", fmt.Sprintf("%d Mbps", node.Hy2UpMbps))
+		}
+		if node.Hy2DownMbps > 0 {
+			add("down", fmt.Sprintf("%d Mbps", node.Hy2DownMbps))
 		}
 
 	case "tuic":

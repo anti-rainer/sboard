@@ -217,7 +217,7 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 	case "shadowsocks":
 		method := node.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		inbound.Set("method", method)
 		inbound.Set("password", node.SsPassword)
@@ -269,7 +269,10 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 	if ((node.TlsEnabled || node.RealityEnabled) && node.Protocol != "shadowsocks" && node.Protocol != "socks") || node.Protocol == "naive" || node.Protocol == "hysteria2" || node.Protocol == "tuic" {
 		serverName := node.ServerName
 		if node.RealityEnabled && node.RealityServer != "" {
-			serverName = node.RealityServer
+			// RealityServer 存的是「伪装目标 host:port」，而 TLS 的
+			// server_name（SNI）只能是主机名。整值塞进去会让握手 SNI
+			// 变成 www.microsoft.com:443，服务端直接握不上。
+			serverName = stripHostPort(node.RealityServer)
 		}
 		tls := map[string]interface{}{
 			"enabled":     true,
@@ -279,8 +282,8 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 		if node.RealityEnabled && node.RealityPrivkey != "" {
 			// Reality 配置（Reality 通常与传输层互斥，但由前端控制）
 			realityHandshake := map[string]interface{}{
-				"server":      node.RealityServer,
-				"server_port": 443,
+				"server":      stripHostPort(node.RealityServer),
+				"server_port": hostPortOf(node.RealityServer, 443),
 			}
 			reality := map[string]interface{}{
 				"enabled":     true,
@@ -602,7 +605,7 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 	case "shadowsocks":
 		method := node.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		inbound.Set("method", method)
 		inbound.Set("password", node.SsPassword)
@@ -666,7 +669,10 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 	if ((node.TlsEnabled || node.RealityEnabled) && node.Protocol != "shadowsocks" && node.Protocol != "socks") || node.Protocol == "naive" || node.Protocol == "hysteria2" || node.Protocol == "tuic" {
 		serverName := node.ServerName
 		if node.RealityEnabled && node.RealityServer != "" {
-			serverName = node.RealityServer
+			// RealityServer 存的是「伪装目标 host:port」，而 TLS 的
+			// server_name（SNI）只能是主机名。整值塞进去会让握手 SNI
+			// 变成 www.microsoft.com:443，服务端直接握不上。
+			serverName = stripHostPort(node.RealityServer)
 		}
 		tls := map[string]interface{}{
 			"enabled":     true,
@@ -675,8 +681,8 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 
 		if node.RealityEnabled && node.RealityPrivkey != "" {
 			realityHandshake := map[string]interface{}{
-				"server":      node.RealityServer,
-				"server_port": 443,
+				"server":      stripHostPort(node.RealityServer),
+				"server_port": hostPortOf(node.RealityServer, 443),
 			}
 			reality := map[string]interface{}{
 				"enabled":     true,

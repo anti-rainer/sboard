@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"strconv"
 
 	"github.com/sboard-go/sboard/internal/database"
 )
@@ -229,10 +230,19 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 		if node.ServerName != "" {
 			params.Set("sni", node.ServerName)
 		}
+		// QUIC/H3 固定 h3，与 mihomo/sing-box 两处保持一致
+		params.Set("alpn", "h3")
 		params.Set("insecure", "1")
 		if node.Hy2Obfs != "" {
 			params.Set("obfs", node.Hy2Obfs)
 			params.Set("obfs-password", node.Hy2ObfsPassword)
+		}
+		// Brutal 带宽需要两侧一致；0 = 不限速，不写该参数
+		if node.Hy2UpMbps > 0 {
+			params.Set("upmbps", strconv.Itoa(node.Hy2UpMbps))
+		}
+		if node.Hy2DownMbps > 0 {
+			params.Set("downmbps", strconv.Itoa(node.Hy2DownMbps))
 		}
 		return fmt.Sprintf("hysteria2://%s@%s:%d?%s#%s", password, formatHostForURL(p.Host), p.Port, params.Encode(), url.PathEscape(p.Name))
 

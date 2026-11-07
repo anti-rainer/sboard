@@ -84,7 +84,7 @@ func buildSurgeProxyLine(name, host string, port int, node *database.InboundNode
 	case "shadowsocks":
 		method := node.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		head = fmt.Sprintf("ss, %s, %d, encrypt-method=%s, password=%s",
 			host, port, method, getSS2022Password(node, uuid))
@@ -167,7 +167,7 @@ func buildSurgeProxyLineFromExternal(name, host string, ext *database.ExternalNo
 	case "shadowsocks":
 		method := ext.SsMethod
 		if method == "" {
-			method = "aes-256-gcm"
+			method = "2022-blake3-aes-256-gcm"
 		}
 		pwd := ext.SsPassword
 		if pwd == "" {

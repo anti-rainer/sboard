@@ -3,6 +3,7 @@ package handler
 import (
 	"net"
 	"strings"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sboard-go/sboard/internal/database"
@@ -224,6 +225,35 @@ func getCountryCode(ipOrHost string) string {
 // RealityServer 存的是伪装目标，形如 www.microsoft.com:443；而 SNI /
 // server_name 字段只接受主机名，带着 ":443" 会让客户端握手失败。
 // 兼容 [v6]:port 与纯 IPv6 两种写法。
+// hostPortOf 从 host:port 里取端口，取不到时返回默认值。
+// 与 stripHostPort 配对使用：Reality 的 handshake 需要 server 与
+// server_port 分开写，不能把 host:port 整个塞进 server。
+func hostPortOf(v string, def int) int {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return def
+	}
+	// 带方括号的 IPv6：[::1]:443
+	if strings.HasPrefix(v, "[") {
+		if i := strings.LastIndex(v, "]"); i > 0 && i+1 < len(v) && v[i+1] == ':' {
+			if p, err := strconv.Atoi(v[i+2:]); err == nil && p > 0 && p < 65536 {
+				return p
+			}
+		}
+		return def
+	}
+	// 纯 IPv6（无端口）原样返回默认值
+	if strings.Count(v, ":") > 1 {
+		return def
+	}
+	if i := strings.LastIndex(v, ":"); i > 0 {
+		if p, err := strconv.Atoi(v[i+1:]); err == nil && p > 0 && p < 65536 {
+			return p
+		}
+	}
+	return def
+}
+
 func stripHostPort(v string) string {
 	v = strings.TrimSpace(v)
 	if v == "" {

@@ -553,17 +553,9 @@
                 <div class="col-6 mb-3">
                   <label class="form-label">加密方式</label>
                   <select class="form-select" v-model="outboundData.method">
-                    <optgroup label="传统加密方式">
-                      <option value="aes-128-gcm">aes-128-gcm</option>
-                      <option value="aes-256-gcm">aes-256-gcm</option>
-                      <option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</option>
-                      <option value="xchacha20-ietf-poly1305">xchacha20-ietf-poly1305</option>
-                    </optgroup>
-                    <optgroup label="SS2022 加密方式">
-                      <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</option>
-                      <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</option>
-                      <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305</option>
-                    </optgroup>
+                    <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm（32 字节）</option>
+                    <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm（16 字节）</option>
+                    <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305（32 字节）</option>
                   </select>
                 </div>
                 <div class="col-6 mb-3">
