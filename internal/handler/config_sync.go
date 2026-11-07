@@ -175,7 +175,10 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 			userEntry["password"] = user.UUID
 		case "vless":
 			userEntry["uuid"] = user.UUID
-			if user.Flow != "" && (node.RealityEnabled || (node.TlsEnabled && !node.TransportEnabled)) {
+			// vision flow 只对「裸 TLS / Reality 裸 TCP」成立；一旦带传输层
+			// （h2 / ws / grpc / quic）就不能下发，否则客户端报
+			//   initialize vision: vision: not a valid supported TLS combination
+			if user.Flow != "" && !node.TransportEnabled && (node.RealityEnabled || node.TlsEnabled) {
 				userEntry["flow"] = user.Flow
 			}
 		case "vmess":
@@ -319,9 +322,15 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 		case "grpc":
 			transport["type"] = "grpc"
 			transport["service_name"] = node.GrpcService
-		case "http":
+		case "http", "h2":
+			// 前端 H2-TLS 分支写的是 h2，官方 schema 里对应 type=http。
+			// 两个值都要认，否则 H2 分支服务端入站没有 transport，
+			// 而客户端带 http 传输层，两边对不上、连不通。
 			transport["type"] = "http"
 			transport["path"] = node.WsPath
+			if node.TransportHost != "" {
+				transport["host"] = []string{node.TransportHost}
+			}
 		case "httpupgrade":
 			transport["type"] = "httpupgrade"
 			transport["path"] = node.WsPath
@@ -717,9 +726,15 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 		case "grpc":
 			transport["type"] = "grpc"
 			transport["service_name"] = node.GrpcService
-		case "http":
+		case "http", "h2":
+			// 前端 H2-TLS 分支写的是 h2，官方 schema 里对应 type=http。
+			// 两个值都要认，否则 H2 分支服务端入站没有 transport，
+			// 而客户端带 http 传输层，两边对不上、连不通。
 			transport["type"] = "http"
 			transport["path"] = node.WsPath
+			if node.TransportHost != "" {
+				transport["host"] = []string{node.TransportHost}
+			}
 		case "httpupgrade":
 			transport["type"] = "httpupgrade"
 			transport["path"] = node.WsPath
@@ -744,7 +759,7 @@ func buildUserEntry(protocol, name, uuid, flow string, node *database.InboundNod
 		userEntry["password"] = uuid
 	case "vless":
 		userEntry["uuid"] = uuid
-		if flow != "" && (node.RealityEnabled || (node.TlsEnabled && !node.TransportEnabled)) {
+		if flow != "" && !node.TransportEnabled && (node.RealityEnabled || node.TlsEnabled) {
 			userEntry["flow"] = flow
 		}
 	case "vmess":

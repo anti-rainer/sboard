@@ -699,6 +699,15 @@ async function saveNode() {
       return
     }
   }
+  // Hysteria2 选了混淆就必须给密码：缺密码时客户端会直接崩
+  //   FATAL initialize outbound: missing obfs password
+  // 而节点在面板上看着完全正常，所以必须在这里拦住。
+  if (formData.value.protocol === 'hysteria2'
+      && formData.value.hy2_obfs
+      && !formData.value.hy2_obfs_password) {
+    showToast('warning', '警告', '启用 Salamander 混淆时必须填写混淆密码')
+    return
+  }
 
   saving.value = true
   try {

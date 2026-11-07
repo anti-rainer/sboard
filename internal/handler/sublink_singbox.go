@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sboard-go/sboard/internal/certdata"
 	"github.com/sboard-go/sboard/internal/database"
 )
 
@@ -637,13 +638,19 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 			outbound["transport"] = buildSingBoxTransport(node)
 		}
 		if node.TlsEnabled {
-			outbound["tls"] = buildSingBoxTLS(node, true)
+			// QUIC 传输跑在 UDP 上，带 uTLS 会 FATAL
+			//   unsupported usage for uTLS
+			outbound["tls"] = buildSingBoxTLS(node, node.TransportType != "quic")
 		}
 
 	case "vless":
 		outbound["type"] = "vless"
 		outbound["uuid"] = p.UUID
-		if node.Flow != "" {
+		// vision flow 只对「裸 TLS / Reality 裸 TCP」成立。带上传输层
+		// （h2 / ws / grpc / quic …）时 sing-box 报
+		//   initialize vision: vision: not a valid supported TLS combination
+		// 与 config_sync.go 里服务端下发 flow 的条件保持一致。
+		if node.Flow != "" && !node.TransportEnabled {
 			outbound["flow"] = node.Flow
 		}
 		if node.TransportEnabled && node.TransportType != "" && node.TransportType != "tcp" {
@@ -683,7 +690,9 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		hy2TLS := buildSingBoxTLS(node, false) // QUIC：不能带 uTLS
 		hy2TLS["alpn"] = []string{"h3"}
 		outbound["tls"] = hy2TLS
-		if node.Hy2Obfs != "" {
+		// 混淆密码为空时不能写 obfs：客户端会 FATAL
+		//   initialize outbound: missing obfs password
+		if node.Hy2Obfs != "" && node.Hy2ObfsPassword != "" {
 			outbound["obfs"] = map[string]interface{}{
 				"type":     node.Hy2Obfs,
 				"password": node.Hy2ObfsPassword,
@@ -723,7 +732,13 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		outbound["type"] = "naive"
 		outbound["username"] = user.Name
 		outbound["password"] = p.UUID
+		// naive 出站不支持 insecure（会 FATAL: insecure is not supported
+		// on naive outbound），只能内联服务端证书建立信任。
+		// 证书有效期必须 ≤ 90 天（cronet 限制，超了报 cert validity too long）。
 		naiveTLS := map[string]interface{}{"enabled": true}
+		if node.Protocol == "naive" && !node.RealityEnabled {
+			naiveTLS["certificate"] = certdata.ServerCert
+		}
 		if node.ServerName != "" {
 			naiveTLS["server_name"] = node.ServerName
 		}
