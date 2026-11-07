@@ -448,6 +448,16 @@ export const deployAll = () => {
 	return api.post<ApiResponse<{ message: string; total: number }>>('/servers/deploy-all')
 }
 
+// 面板自我更新（后端下载校验后替换二进制并重启服务）
+export const panelSelfUpdate = () => {
+	return api.post<ApiResponse<{ message: string }>>('/servers/panel-update')
+}
+
+// 面板更新状态
+export const getPanelUpdateStatus = () => {
+	return api.get<ApiResponse<{ running: boolean; message: string; success: boolean; finished: boolean }>>('/servers/panel-update/status')
+}
+
 // Agent 更新（向所有存活 Agent 发送自我更新指令）
 export const updateAllAgents = () => {
 	return api.post<ApiResponse<{ message: string; total: number }>>('/servers/update-agents')

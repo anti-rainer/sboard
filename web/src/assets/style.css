@@ -1435,36 +1435,39 @@ pre code {
   .sb-update-text { flex: 1 1 100%; }
 }
 
-/* Agent 版本与二进制指纹 */
-.sb-agent-hash {
+/* 服务器卡片地址行：左侧地址、右侧版本/提示顶格 */
+.server-host-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  font-size: 0.78rem;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
+.server-host-addr {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Agent 版本号：贴右顶格，弱化显示 */
 .sb-agent-ver {
-  color: var(--sb-text-muted);
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
-}
-
-.sb-hash-short {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.74rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 4px;
-  background: var(--sb-surface-3);
-  border: 1px solid var(--sb-border);
   color: var(--sb-text-muted);
-  cursor: pointer;
-  transition: color var(--sb-dur) var(--sb-ease),
-              border-color var(--sb-dur) var(--sb-ease);
+  cursor: default;
 }
 
-.sb-hash-short:hover {
-  color: var(--sb-accent);
-  border-color: var(--sb-accent);
+/* 版本不一致提示：贴右顶格 */
+.sb-ver-mismatch {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.1rem 0.4rem;
+  cursor: default;
 }
 
 /* ---------- 移动端 ---------- */

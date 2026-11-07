@@ -6,6 +6,11 @@
         <div class="sb-subtitle">共 {{ servers.length }} 台 · 拖动卡片左上角手柄可调整顺序</div>
       </div>
       <div class="sb-toolbar">
+        <button class="btn btn-sm btn-secondary" @click="panelUpdate" :disabled="updatingPanel"
+                title="更新面板自身：下载新版本二进制并重启服务">
+          <span v-if="updatingPanel" class="spinner-border spinner-border-sm"></span>
+          <i v-else class="bi bi-arrow-up-circle"></i> 面板更新
+        </button>
         <button class="btn btn-sm btn-secondary" @click="updateAllAgents" :disabled="updatingAgents">
           <span v-if="updatingAgents" class="spinner-border spinner-border-sm"></span>
           <i v-else class="bi bi-cloud-download"></i> Agent 更新
@@ -60,20 +65,25 @@
                 </span>
               </div>
             </div>
-            <div class="server-host">
-              <i class="bi bi-hdd"></i> {{ maskIP(server.host) || '等待 Agent 上报' }}
+            <!-- IPv4 行：右侧顶格显示 Agent 版本 -->
+            <div class="server-host server-host-row">
+              <span class="server-host-addr">
+                <i class="bi bi-hdd"></i> {{ maskIP(server.host) || '等待 Agent 上报' }}
+              </span>
+              <span v-if="server.agent_version" class="sb-agent-ver"
+                    :title="`sha256: ${server.agent_hash || '-'}\n构建时间: ${server.agent_built_at || '-'}`">
+                {{ server.agent_version }}
+              </span>
             </div>
-            <div v-if="server.host_ipv6" class="server-host">
-              <i class="bi bi-hdd-stack"></i> {{ maskIP(server.host_ipv6) }}
-            </div>
-            <!-- Agent 版本与二进制指纹：确认「跑的是哪一份」，仅版本号不够 -->
-            <div v-if="server.agent_hash" class="server-host sb-agent-hash"
-                 :title="`sha256: ${server.agent_hash}\n路径: ${server.agent_path || '-'}\n构建时间: ${server.agent_built_at || '-'}`">
-              <i class="bi bi-fingerprint"></i>
-              <span class="sb-agent-ver">{{ server.agent_version || '-' }}</span>
-              <code class="sb-hash-short" @click="copyHash(server.agent_hash)">{{ server.agent_hash.slice(0, 12) }}</code>
-              <span v-if="hashMismatch(server)" class="badge bg-warning"
-                    title="hash 与多数机器不一致，可能未更新">版本不一致</span>
+            <!-- IPv6 行：右侧顶格显示版本不一致提示 -->
+            <div v-if="server.host_ipv6" class="server-host server-host-row">
+              <span class="server-host-addr">
+                <i class="bi bi-hdd-stack"></i> {{ maskIP(server.host_ipv6) }}
+              </span>
+              <span v-if="hashMismatch(server)" class="badge bg-warning sb-ver-mismatch"
+                    :title="`本机 sha256: ${server.agent_hash}\n与多数机器不一致，可能未更新`">
+                版本不一致
+              </span>
             </div>
           </div>
           
@@ -815,7 +825,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, inject, computed } from 'vue'
 import { Modal } from 'bootstrap'
-import { getServers, createServer, updateServer, deleteServer, getNodes, deployServer, deployAll as apiDeployAll, updateAllAgents as apiUpdateAllAgents, regenerateAgentToken, getServersStatus, reorderServers, getNodeConfigs, saveNodeConfig as saveNodeConfigApi, getServerOutbounds, createServerOutbound, updateServerOutbound, deleteServerOutbound, toggleServerOutbound, type Server, type Node, type ServerStatus, type NodeConfig, type ServerOutbound } from '@/api'
+import { getServers, createServer, updateServer, deleteServer, getNodes, deployServer, deployAll as apiDeployAll, updateAllAgents as apiUpdateAllAgents, panelSelfUpdate, getPanelUpdateStatus, regenerateAgentToken, getServersStatus, reorderServers, getNodeConfigs, saveNodeConfig as saveNodeConfigApi, getServerOutbounds, createServerOutbound, updateServerOutbound, deleteServerOutbound, toggleServerOutbound, type Server, type Node, type ServerStatus, type NodeConfig, type ServerOutbound } from '@/api'
 import { parseProxyLink, type ParsedProxy } from '../utils/proxyLink'
 import { MAIN_PROTOCOLS, getBranches, detectBranch, type ProtocolBranch } from '@/utils/protocolBranches'
 
@@ -1631,6 +1641,50 @@ async function deployFolder(server: ServerWithState) {
   }
 }
 
+/** 面板自我更新中 */
+const updatingPanel = ref(false)
+
+/** 触发面板自我更新 */
+async function panelUpdate() {
+  if (!confirm('将下载最新版本并重启面板服务，期间几秒内无法访问。确定继续？')) return
+
+  updatingPanel.value = true
+  try {
+    const res = await panelSelfUpdate()
+    showToast('success', '已启动', res.data.data?.message || '面板更新已启动，服务即将重启')
+    pollPanelUpdate()
+  } catch (error: any) {
+    updatingPanel.value = false
+    showToast('error', '错误', error.response?.data?.error || '面板更新启动失败')
+  }
+}
+
+/** 轮询更新状态：更新会重启服务，探测到服务恢复即算完成 */
+function pollPanelUpdate() {
+  let attempts = 0
+  const timer = window.setInterval(async () => {
+    attempts++
+    try {
+      const res = await getPanelUpdateStatus()
+      const st = res.data.data
+      if (st?.finished) {
+        window.clearInterval(timer)
+        updatingPanel.value = false
+        showToast(st.success ? 'success' : 'error',
+          st.success ? '更新完成' : '更新失败', st.message || '')
+      }
+    } catch {
+      // 服务重启中，请求会失败——这本身说明更新在进行，继续等
+    }
+    // 最多等 5 分钟
+    if (attempts > 60) {
+      window.clearInterval(timer)
+      updatingPanel.value = false
+      showToast('warning', '提示', '更新状态未知，请手动刷新页面确认')
+    }
+  }, 5000)
+}
+
 async function updateAllAgents() {
   updatingAgents.value = true
   
@@ -1785,17 +1839,6 @@ const majorityHash = computed(() => {
 function hashMismatch(server: ServerWithState): boolean {
   if (!server.agent_hash || !majorityHash.value) return false
   return server.agent_hash !== majorityHash.value
-}
-
-/** 复制完整 hash，方便与发布产物比对 */
-async function copyHash(hash?: string) {
-  if (!hash) return
-  try {
-    await copyToClipboard(hash)
-    showToast('success', '成功', 'sha256 已复制')
-  } catch {
-    showToast('error', '错误', '复制失败')
-  }
 }
 
 async function copyDeployCommand() {
