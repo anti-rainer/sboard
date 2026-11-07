@@ -20,10 +20,11 @@ const (
 	MsgTypeCommand      MessageType = "command"       // 执行命令
 	MsgTypeDeployFile   MessageType = "deploy_file"   // 部署单文件
 	MsgTypeDeployDir    MessageType = "deploy_dir"    // 部署目录
-	MsgTypeSyncConfig   MessageType = "sync_config"   // 同步配置
 	MsgTypeRestart      MessageType = "restart"       // 重启服务
 	MsgTypeDeployCore   MessageType = "deploy_core"   // 部署核心
 	MsgTypeSelfUpdate   MessageType = "self_update"   // 自我更新
+	// MsgTypeCertUpdate 证书刷新（单向通知，agent 不回应）
+	MsgTypeCertUpdate MessageType = "cert_update"
 )
 
 // Message WebSocket 消息结构
@@ -111,14 +112,6 @@ type DeployDirData struct {
 	Backup bool              `json:"backup,omitempty"` // 是否备份
 }
 
-// SyncConfigData 同步配置数据
-type SyncConfigData struct {
-	ConfigType string `json:"config_type"` // sing-box
-	Content    string `json:"content"`     // 配置内容
-	Restart    bool   `json:"restart"`     // 是否重启服务
-	TargetPath string `json:"target_path"` // 目标路径，如 /opt/sboard/sing-box
-}
-
 // RestartData 重启服务数据
 type RestartData struct {
 	Service string `json:"service"` // 服务名: sing-box
@@ -129,6 +122,10 @@ type DeployCoreData struct {
 	CoreType   string `json:"core_type"`   // sing-box
 	TargetPath string `json:"target_path"` // 目标安装路径，如 /opt/sboard/sing-box
 	Config     string `json:"config"`      // 配置文件内容
+	// CertPEM / KeyPEM 节点 TLS 证书与私钥。面板是证书的唯一来源，
+	// 部署时一并发下，agent 不再内嵌证书文件。
+	CertPEM string `json:"cert_pem,omitempty"`
+	KeyPEM  string `json:"key_pem,omitempty"`
 }
 
 // DeployCoreRespData 部署核心响应数据
@@ -140,6 +137,30 @@ type DeployCoreRespData struct {
 	Running      bool   `json:"running"`
 	OtherService string `json:"other_service"`
 	OtherRunning bool   `json:"other_running"`
+}
+
+// CertUpdateData 证书刷新指令数据（单向通知，agent 不回应）。
+//
+// agent 收到后检查本地证书有效期：
+//   - 剩余 > 30 天：什么都不做
+//   - 剩余 ≤ 30 天或证书缺失：写入下发的证书
+//
+// sing-box 的 TLS certificate_path 是热加载的，无需重启服务。
+type CertUpdateData struct {
+	CertPEM string `json:"cert_pem"`
+	KeyPEM  string `json:"key_pem"`
+	// TargetPath 证书所在目录，如 /opt/sboard/sing-box
+	TargetPath string `json:"target_path"`
+	// RenewBeforeDays 续期阈值（天），由面板下发以便统一调整
+	RenewBeforeDays int `json:"renew_before_days,omitempty"`
+}
+
+// CertUpdateRespData 证书刷新结果（agent 不回传，仅用于日志/调试）。
+type CertUpdateRespData struct {
+	Updated      bool   `json:"updated"`
+	DaysLeft     int    `json:"days_left"`
+	CertPath     string `json:"cert_path"`
+	RestartNeeded bool  `json:"restart_needed"`
 }
 
 // SelfUpdateData 自我更新指令数据。

@@ -1609,14 +1609,14 @@ async function doDelete() {
 async function deployFolder(server: ServerWithState) {
   server.deployingFolder = true
   try {
-    const res = await deployServer(server.id, 'folder')
-    deployOutput.value = res.data.data?.output || '目录部署完成'
+    const res = await deployServer(server.id)
+    deployOutput.value = res.data.data?.output || '部署完成'
     deployModal?.show()
-    showToast('success', '成功', `服务器 ${server.name} 目录部署完成`)
+    showToast('success', '成功', `${server.name} 部署完成`)
   } catch (error: any) {
-    deployOutput.value = error.response?.data?.error || '目录部署失败'
+    deployOutput.value = error.response?.data?.error || '部署失败'
     deployModal?.show()
-    showToast('error', '错误', `服务器 ${server.name} 目录部署失败`)
+    showToast('error', '错误', `${server.name} 部署失败`)
   } finally {
     server.deployingFolder = false
   }
@@ -1644,7 +1644,7 @@ async function deployAll() {
     const res = await apiDeployAll()
     const data = res.data.data
     
-    showToast('success', '成功', `${data.message}（共 ${data.total} 个存活 Agent）`)
+    showToast('success', '成功', `已向 ${data.total} 个在线服务器广播部署`)
   } catch (error: any) {
     showToast('error', '错误', error.response?.data?.error || '部署失败')
   } finally {

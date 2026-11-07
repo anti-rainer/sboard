@@ -436,20 +436,15 @@ func (s *Server) handleSetServerNodes(c *gin.Context) {
 	successMsgJSON(c, "节点配置已更新")
 }
 
-// handleDeployServer 部署服务器
+// handleDeployServer 部署服务器。
+//
+// 只有一种部署方式：目录部署（核心二进制 + 配置 + 证书一起下发）。
+// 原先的「仅配置同步」与它实际效果等价，已经合并掉。
 func (s *Server) handleDeployServer(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		errorJSON(c, http.StatusBadRequest, "无效的服务器ID")
 		return
-	}
-
-	// 获取请求参数
-	var req struct {
-		Type string `json:"type"` // config 或 folder
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		req.Type = "config" // 默认是 config
 	}
 
 	var server database.Server
@@ -464,13 +459,15 @@ func (s *Server) handleDeployServer(c *gin.Context) {
 		return
 	}
 
-	s.handleDeployServerViaAgent(c, &server, req.Type)
+	s.deployServerViaAgent(c, &server)
 }
 
-// handleDeployServerViaAgent 通过 Agent 部署
-func (s *Server) handleDeployServerViaAgent(c *gin.Context, server *database.Server, deployType string) {
-	// 生成配置
-	// 为保证一致性，重新查出完整 server 结构体（与预览接口一致）
+// deployServerViaAgent 通过 Agent 目录部署一台服务器。
+//
+// 只有这一条路径：核心二进制 + 配置 + 证书一起下发。
+// 配置同步（sync_config）与它效果等价，已经合并掉。
+func (s *Server) deployServerViaAgent(c *gin.Context, server *database.Server) {
+	// 重新查出完整 server 结构体（与预览接口一致）
 	var fullServer database.Server
 	if err := database.GetDB().First(&fullServer, server.ID).Error; err != nil {
 		errorJSON(c, http.StatusNotFound, "服务器不存在")
@@ -482,95 +479,52 @@ func (s *Server) handleDeployServerViaAgent(c *gin.Context, server *database.Ser
 		return
 	}
 
-	// 目标路径
-	targetPath := "/opt/sboard/sing-box"
+	// 节点证书：面板是唯一来源，随每次部署一起下发
+	certPEM, keyPEM := nodeCertificate()
 
-	// 根据部署类型决定发送的消息
-	if deployType == "folder" {
-		// 目录部署：部署核心程序和配置
-		data := &agent.DeployCoreData{
-			CoreType:   "sing-box",
-			TargetPath: targetPath,
-			Config:     config,
-		}
-		rawData, _ := json.Marshal(data)
-
-		msg := &agent.Message{
-			Type: agent.MsgTypeDeployCore,
-			Data: rawData,
-		}
-
-		resp, err := agentHub.SendCommand(uint(server.ID), msg, 120*time.Second)
-		if err != nil {
-			if _, ok := err.(*AgentOfflineError); ok {
-				errorJSON(c, http.StatusServiceUnavailable, "Agent 离线")
-				return
-			}
-			errorJSON(c, http.StatusGatewayTimeout, err.Error())
-			return
-		}
-
-		if resp.Error != "" {
-			errorJSON(c, http.StatusInternalServerError, resp.Error)
-			return
-		}
-
-		// 解析响应
-		var respData agent.DeployCoreRespData
-		if err := resp.ParseData(&respData); err != nil {
-			errorJSON(c, http.StatusInternalServerError, "解析响应失败")
-			return
-		}
-
-		// 更新服务器的最后部署时间
-		database.GetDB().Model(server).Update("last_deploy_at", time.Now())
-
-		// 构建输出信息
-		output := fmt.Sprintf("目录部署完成！\n核心类型: %s\n目标路径: %s\n服务名: %s\n运行状态: %v\n对侧服务: %s (运行状态: %v)",
-			respData.CoreType, respData.TargetPath, respData.ServiceName, respData.Running,
-			respData.OtherService, respData.OtherRunning)
-
-		successJSON(c, gin.H{
-			"output": output,
-			"data":   respData,
-		})
-	} else {
-		// 配置部署：只更新配置文件
-		data := &agent.SyncConfigData{
-			ConfigType: "sing-box",
-			Content:    config,
-			Restart:    true,
-			TargetPath: "/opt/sboard/sing-box",
-		}
-		rawData, _ := json.Marshal(data)
-
-		msg := &agent.Message{
-			Type: agent.MsgTypeSyncConfig,
-			Data: rawData,
-		}
-
-		resp, err := agentHub.SendCommand(uint(server.ID), msg, 60*time.Second)
-		if err != nil {
-			if _, ok := err.(*AgentOfflineError); ok {
-				errorJSON(c, http.StatusServiceUnavailable, "Agent 离线")
-				return
-			}
-			errorJSON(c, http.StatusGatewayTimeout, err.Error())
-			return
-		}
-
-		if resp.Error != "" {
-			errorJSON(c, http.StatusInternalServerError, resp.Error)
-			return
-		}
-
-		// 更新服务器的最后部署时间
-		database.GetDB().Model(server).Update("last_deploy_at", time.Now())
-
-		successJSON(c, gin.H{
-			"output": "配置部署完成！已同步配置并重启服务。",
-		})
+	data := &agent.DeployCoreData{
+		CoreType:   "sing-box",
+		TargetPath: "/opt/sboard/sing-box",
+		Config:     config,
+		CertPEM:    certPEM,
+		KeyPEM:     keyPEM,
 	}
+	rawData, _ := json.Marshal(data)
+
+	msg := &agent.Message{
+		Type: agent.MsgTypeDeployCore,
+		Data: rawData,
+	}
+
+	resp, err := agentHub.SendCommand(uint(server.ID), msg, 120*time.Second)
+	if err != nil {
+		if _, ok := err.(*AgentOfflineError); ok {
+			errorJSON(c, http.StatusServiceUnavailable, "Agent 离线")
+			return
+		}
+		errorJSON(c, http.StatusGatewayTimeout, err.Error())
+		return
+	}
+
+	if resp.Error != "" {
+		errorJSON(c, http.StatusInternalServerError, resp.Error)
+		return
+	}
+
+	var respData agent.DeployCoreRespData
+	if err := resp.ParseData(&respData); err != nil {
+		errorJSON(c, http.StatusInternalServerError, "解析响应失败")
+		return
+	}
+
+	database.GetDB().Model(server).Update("last_deploy_at", time.Now())
+
+	successJSON(c, gin.H{
+		"output": fmt.Sprintf("部署完成！核心类型: %s\n目标路径: %s\n服务名: %s\n运行状态: %v\n对侧服务: %s (运行状态: %v)",
+			respData.CoreType, respData.TargetPath, respData.ServiceName, respData.Running,
+			respData.OtherService, respData.OtherRunning),
+		"data": respData,
+	})
 }
 
 // generateAgentToken 生成 Agent Token

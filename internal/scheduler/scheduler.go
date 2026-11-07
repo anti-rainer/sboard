@@ -4,16 +4,25 @@ import (
 	"log"
 	"time"
 
+	"github.com/sboard-go/sboard/internal/certmgr"
 	"github.com/sboard-go/sboard/internal/database"
 )
 
 // ConfigSyncCallback 配置同步回调函数类型
 type ConfigSyncCallback func()
 
+// CertRefreshCallback 证书刷新广播回调函数类型。
+//
+// 面板每天检查证书有效期；需要续期时重新签发，然后把新证书推给所有 agent。
+// 推送是单向的，agent 不回应。
+type CertRefreshCallback func(certPEM, keyPEM string)
+
 // Scheduler 定时任务调度器
 type Scheduler struct {
-	stopChan       chan struct{}
-	onConfigChange ConfigSyncCallback
+	stopChan        chan struct{}
+	onConfigChange  ConfigSyncCallback
+	onCertRefresh   CertRefreshCallback
+	lastCertDay     string // 上次执行证书检查的日期，保证每天只查一次
 }
 
 // New 创建新的调度器
@@ -28,6 +37,11 @@ func (s *Scheduler) SetConfigSyncCallback(callback ConfigSyncCallback) {
 	s.onConfigChange = callback
 }
 
+// SetCertRefreshCallback 设置证书刷新广播回调
+func (s *Scheduler) SetCertRefreshCallback(callback CertRefreshCallback) {
+	s.onCertRefresh = callback
+}
+
 // Start 启动调度器
 func (s *Scheduler) Start() {
 	log.Println("定时任务调度器已启动")
@@ -36,6 +50,8 @@ func (s *Scheduler) Start() {
 	go s.runPeriodically(10*time.Minute, s.checkExpiredUsers, true)
 	// 每10分钟检查一次是否需要重置月度流量
 	go s.runPeriodically(10*time.Minute, s.checkMonthlyTrafficReset, false)
+	// 每10分钟看一眼证书，每天最多真正执行一次
+	go s.runPeriodically(10*time.Minute, s.checkCertificate, false)
 }
 
 // Stop 停止调度器
@@ -81,6 +97,43 @@ func (s *Scheduler) checkExpiredUsers() {
 		if s.onConfigChange != nil {
 			go s.onConfigChange()
 		}
+	}
+}
+
+// checkCertificate 每天检查一次节点证书有效期。
+//
+// 剩余有效期 ≤ 阈值时重新签发，并把新证书推给所有在线 agent：
+//   - 部署/同步时本来就会带证书，但那依赖有配置变更；证书过期与配置无关，
+//     必须由定时任务主动推。
+//   - agent 收到后仍会按同一阈值判断，> 阈值则无动作，所以重复推送无害。
+//
+// 推送是单向的，agent 不回应。
+func (s *Scheduler) checkCertificate() {
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	if s.lastCertDay == today {
+		return // 今天已经查过
+	}
+
+	cert, renewed, err := certmgr.Ensure(now)
+	if err != nil {
+		log.Printf("检查节点证书失败: %v", err)
+		return
+	}
+	s.lastCertDay = today
+
+	daysLeft := cert.DaysLeft(now)
+	if renewed {
+		log.Printf("节点证书已续期，剩余 %d 天，正在推送给所有 agent", daysLeft)
+	} else {
+		log.Printf("节点证书剩余 %d 天（阈值 %d 天），无需续期，仅推送确认",
+			daysLeft, certmgr.RenewBeforeDays)
+	}
+
+	// 无论是否续期都推一次：新上线的 agent 或曾经离线的 agent 靠这次补齐，
+	// agent 侧阈值判断保证无变化时不写文件。
+	if s.onCertRefresh != nil {
+		s.onCertRefresh(cert.CertPEM, cert.KeyPEM)
 	}
 }
 

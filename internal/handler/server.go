@@ -129,7 +129,7 @@ func (s *Server) setupRoutes() {
 				// Agent 相关
 				servers.GET("/:id/agent/status", s.handleGetAgentStatus)
 				servers.POST("/:id/agent/command", s.handleSendAgentCommand)
-				servers.POST("/:id/agent/sync", s.handleSyncConfigToAgent)
+
 				servers.POST("/:id/agent/deploy", s.handleDeployCoreToAgent)
 				servers.POST("/:id/agent/regenerate-token", s.handleRegenerateAgentToken)
 			}

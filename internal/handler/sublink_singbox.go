@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sboard-go/sboard/internal/certdata"
+	"github.com/sboard-go/sboard/internal/certmgr"
 	"github.com/sboard-go/sboard/internal/database"
 )
 
@@ -733,11 +733,13 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 		outbound["username"] = user.Name
 		outbound["password"] = p.UUID
 		// naive 出站不支持 insecure（会 FATAL: insecure is not supported
-		// on naive outbound），只能内联服务端证书建立信任。
-		// 证书有效期必须 ≤ 90 天（cronet 限制，超了报 cert validity too long）。
+		// on naive outbound），只能把服务端证书内联进配置建立信任。
+		// 证书由面板签发维护，与下发给 agent 的是同一张。
 		naiveTLS := map[string]interface{}{"enabled": true}
-		if node.Protocol == "naive" && !node.RealityEnabled {
-			naiveTLS["certificate"] = certdata.ServerCert
+		if !node.RealityEnabled {
+			if cert, err := certmgr.Load(); err == nil && cert != nil {
+				naiveTLS["certificate"] = cert.CertPEM
+			}
 		}
 		if node.ServerName != "" {
 			naiveTLS["server_name"] = node.ServerName

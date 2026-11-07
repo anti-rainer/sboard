@@ -133,6 +133,7 @@ func main() {
 	// 启动定时任务调度器
 	sched := scheduler.New()
 	sched.SetConfigSyncCallback(handler.BroadcastConfigUpdate)
+	sched.SetCertRefreshCallback(handler.BroadcastCertUpdate)
 	sched.Start()
 
 	// 创建 HTTP 服务器

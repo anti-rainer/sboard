@@ -435,8 +435,9 @@ export const toggleServerOutbound = (serverId: number, slot: number) => {
 }
 
 // 部署相关
-export const deployServer = (serverId: number, type: string) => {
-	return api.post<ApiResponse<{ output?: string; data?: unknown }>>(`/servers/${serverId}/deploy`, { type })
+// 只有一种部署方式：目录部署（核心二进制 + 配置 + 证书一起下发）
+export const deployServer = (serverId: number) => {
+	return api.post<ApiResponse<{ output?: string; data?: unknown }>>(`/servers/${serverId}/deploy`)
 }
 
 // 全部部署（向所有存活 Agent 发送部署核心指令）

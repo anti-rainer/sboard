@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/sboard-go/sboard/internal/agent"
+	"github.com/sboard-go/sboard/internal/certmgr"
 	"github.com/sboard-go/sboard/internal/database"
 	"gorm.io/gorm"
 )
@@ -442,6 +444,52 @@ func (h *AgentHub) RemoveAgent(agentID string) {
 	}
 }
 
+// BroadcastCertUpdate 向所有在线 Agent 单向推送证书（不等待响应）。
+//
+// 由定时任务在证书续期时调用。agent 侧会再按阈值判断一次：
+// 剩余有效期超过阈值就什么都不做，因此这里的重复推送是安全的。
+func (h *AgentHub) BroadcastCertUpdate(certPEM, keyPEM string) {
+	if certPEM == "" || keyPEM == "" {
+		return
+	}
+
+	h.mu.RLock()
+	conns := make([]*AgentConnection, 0, len(h.serverMap))
+	for _, conn := range h.serverMap {
+		if conn != nil && conn.IsAlive() {
+			conns = append(conns, conn)
+		}
+	}
+	h.mu.RUnlock()
+
+	if len(conns) == 0 {
+		return
+	}
+
+	rawData, err := json.Marshal(&agent.CertUpdateData{
+		CertPEM:         certPEM,
+		KeyPEM:          keyPEM,
+		TargetPath:      "/opt/sboard/sing-box",
+		RenewBeforeDays: certmgr.RenewBeforeDays,
+	})
+	if err != nil {
+		log.Printf("序列化证书刷新指令失败: %v", err)
+		return
+	}
+
+	for _, conn := range conns {
+		msg := &agent.Message{
+			Type:      agent.MsgTypeCertUpdate,
+			Timestamp: time.Now().Unix(),
+			Data:      rawData,
+		}
+		if err := conn.Send(msg); err != nil {
+			log.Printf("向服务器 %d 推送证书失败: %v", conn.ServerID, err)
+		}
+	}
+	log.Printf("已向 %d 个 agent 单向推送证书刷新指令", len(conns))
+}
+
 // GetOnlineServers 获取所有在线的服务器 ID
 func (h *AgentHub) GetOnlineServers() []uint {
 	h.mu.RLock()
@@ -508,6 +556,9 @@ func (h *AgentHub) doSyncConfig() {
 		return
 	}
 
+	// 证书只取一次，全部 agent 共用同一张（面板是唯一来源）
+	certPEM, keyPEM := nodeCertificate()
+
 	// 每个 Agent 独立的 goroutine 处理，完全异步
 	for _, agentInfo := range aliveAgents {
 		go func(serverID uint, conn *AgentConnection) {
@@ -534,18 +585,19 @@ func (h *AgentHub) doSyncConfig() {
 				return
 			}
 
-			// 构造消息
-			data := &agent.SyncConfigData{
-				ConfigType: "sing-box",
-				Content:    config,
-				Restart:    true,
+			// 构造部署消息（部署是唯一路径，广播也用它）
+			data := &agent.DeployCoreData{
+				CoreType:   "sing-box",
 				TargetPath: "/opt/sboard/sing-box",
+				Config:     config,
+				CertPEM:    certPEM,
+				KeyPEM:     keyPEM,
 			}
 			rawData, _ := json.Marshal(data)
 
 			msg := &agent.Message{
 				ID:        generateMsgID(),
-				Type:      agent.MsgTypeSyncConfig,
+				Type:      agent.MsgTypeDeployCore,
 				Data:      rawData,
 				Timestamp: time.Now().Unix(),
 			}
@@ -564,6 +616,14 @@ func (h *AgentHub) doSyncConfig() {
 // BroadcastConfigUpdate 包级别导出函数，供外部调用
 func BroadcastConfigUpdate() {
 	agentHub.BroadcastConfigUpdate()
+}
+
+// BroadcastCertUpdate 向所有在线 Agent 单向推送证书（不等待响应）。
+//
+// 由定时任务在每日证书检查时调用。agent 收到后按阈值自行判断是否写入，
+// 剩余有效期超过阈值就无动作，因此重复推送安全。
+func BroadcastCertUpdate(certPEM, keyPEM string) {
+	agentHub.BroadcastCertUpdate(certPEM, keyPEM)
 }
 
 var (
@@ -748,74 +808,6 @@ func (s *Server) handleSendAgentCommand(c *gin.Context) {
 	successJSON(c, respData)
 }
 
-// handleSyncConfigToAgent 同步配置到 Agent
-func (s *Server) handleSyncConfigToAgent(c *gin.Context) {
-	serverID := parseUint(c.Param("id"))
-	if serverID == 0 {
-		errorJSON(c, http.StatusBadRequest, "无效的服务器ID")
-		return
-	}
-
-	var req struct {
-		ConfigType string `json:"config_type"`
-		Restart    bool   `json:"restart"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		errorJSON(c, http.StatusBadRequest, "请求参数错误")
-		return
-	}
-
-	// 获取服务器
-	var server database.Server
-	if err := database.GetDB().First(&server, serverID).Error; err != nil {
-		errorJSON(c, http.StatusNotFound, "服务器不存在")
-		return
-	}
-
-	// 生成配置
-	configType := req.ConfigType
-	if configType == "" {
-		configType = "sing-box"
-	}
-
-	config, err := GenerateServerConfig(&server, configType)
-	if err != nil {
-		errorJSON(c, http.StatusInternalServerError, "生成配置失败: "+err.Error())
-		return
-	}
-
-	// 发送同步命令
-	data := &agent.SyncConfigData{
-		ConfigType: configType,
-		Content:    config,
-		Restart:    req.Restart,
-		TargetPath: "/opt/sboard/sing-box",
-	}
-	rawData, _ := json.Marshal(data)
-
-	msg := &agent.Message{
-		Type: agent.MsgTypeSyncConfig,
-		Data: rawData,
-	}
-
-	resp, err := agentHub.SendCommand(uint(serverID), msg, 60*time.Second)
-	if err != nil {
-		if _, ok := err.(*AgentOfflineError); ok {
-			errorJSON(c, http.StatusServiceUnavailable, "Agent 离线")
-			return
-		}
-		errorJSON(c, http.StatusGatewayTimeout, err.Error())
-		return
-	}
-
-	if resp.Error != "" {
-		errorJSON(c, http.StatusInternalServerError, resp.Error)
-		return
-	}
-
-	successMsgJSON(c, "配置同步成功")
-}
-
 // handleDeployCoreToAgent 部署核心到 Agent
 func (s *Server) handleDeployCoreToAgent(c *gin.Context) {
 	serverID, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -852,11 +844,16 @@ func (s *Server) handleDeployCoreToAgent(c *gin.Context) {
 		return
 	}
 
+	// 节点证书：面板是唯一来源，随部署一起下发
+	certPEM, keyPEM := nodeCertificate()
+
 	// 发送部署命令
 	data := &agent.DeployCoreData{
 		CoreType:   "sing-box",
 		TargetPath: targetPath,
 		Config:     config,
+		CertPEM:    certPEM,
+		KeyPEM:     keyPEM,
 	}
 	rawData, _ := json.Marshal(data)
 
@@ -919,6 +916,9 @@ func (s *Server) handleDeployAll(c *gin.Context) {
 		return
 	}
 
+	// 证书只取一次，全部服务器共用同一张（面板是唯一来源）
+	certPEM, keyPEM := nodeCertificate()
+
 	// 收集存活的 Agent
 	type aliveServer struct {
 		Server database.Server
@@ -965,6 +965,8 @@ func (s *Server) handleDeployAll(c *gin.Context) {
 					CoreType:   "sing-box",
 					TargetPath: "/opt/sboard/sing-box",
 					Config:     config,
+					CertPEM:    certPEM,
+					KeyPEM:     keyPEM,
 				}
 				rawData, _ := json.Marshal(deployCoreData)
 				deployCoreMsg := &agent.Message{
@@ -974,7 +976,14 @@ func (s *Server) handleDeployAll(c *gin.Context) {
 					Timestamp: time.Now().Unix(),
 				}
 
-				agentHub.SendCommand(srv.Server.ID, deployCoreMsg, 5*time.Second)
+				// 单向发送：全量部署是广播语义，不逐台等回执
+				// （逐台等待会让整个广播被最慢的一台拖住）。
+				if err := agentHub.SendNotify(srv.Server.ID, deployCoreMsg); err != nil {
+					log.Printf("向服务器 %d 下发部署失败: %v", srv.Server.ID, err)
+					return
+				}
+				database.GetDB().Model(&database.Server{}).Where("id = ?", srv.Server.ID).
+					Update("last_deploy_at", time.Now())
 			}(srv)
 		}
 		wg.Wait()

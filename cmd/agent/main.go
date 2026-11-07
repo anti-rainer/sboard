@@ -81,10 +81,10 @@ const (
 	MsgTypeCommand      MessageType = "command"
 	MsgTypeDeployFile   MessageType = "deploy_file"
 	MsgTypeDeployDir    MessageType = "deploy_dir"
-	MsgTypeSyncConfig   MessageType = "sync_config"
 	MsgTypeRestart      MessageType = "restart"
 	MsgTypeDeployCore   MessageType = "deploy_core" // 部署核心
 	MsgTypeSelfUpdate   MessageType = "self_update" // 自我更新
+	MsgTypeCertUpdate   MessageType = "cert_update" // 证书刷新（单向）
 )
 
 // Message 消息结构
@@ -104,6 +104,14 @@ type SelfUpdateData struct {
 	ReleaseType     string   `json:"release_type,omitempty"`
 	Proxy           string   `json:"proxy,omitempty"`
 	FallbackProxies []string `json:"fallback_proxies,omitempty"`
+}
+
+// CertUpdateData 证书刷新指令数据（单向通知，agent 不回传结果）。
+type CertUpdateData struct {
+	CertPEM         string `json:"cert_pem"`
+	KeyPEM          string `json:"key_pem"`
+	TargetPath      string `json:"target_path"`
+	RenewBeforeDays int    `json:"renew_before_days,omitempty"`
 }
 
 func main() {
@@ -516,8 +524,6 @@ func (a *Agent) handleMessage(msg *Message) {
 		resp, err = a.handleDeployFile(msg)
 	case MsgTypeDeployDir:
 		resp, err = a.handleDeployDir(msg)
-	case MsgTypeSyncConfig:
-		resp, err = a.handleSyncConfig(msg)
 	case MsgTypeRestart:
 		resp, err = a.handleRestart(msg)
 	case MsgTypeDeployCore:
@@ -525,6 +531,10 @@ func (a *Agent) handleMessage(msg *Message) {
 	case MsgTypeSelfUpdate:
 		// 自我更新为单向通知，不返回响应，异步执行
 		go a.handleSelfUpdate(msg)
+		return
+	case MsgTypeCertUpdate:
+		// 证书刷新为单向通知，不返回响应，异步执行
+		go a.handleCertUpdate(msg)
 		return
 	case MsgTypeRegisterResp:
 		// 注册响应
@@ -868,94 +878,6 @@ func (a *Agent) handleDeployDir(msg *Message) (*Message, error) {
 	}, nil
 }
 
-func (a *Agent) handleSyncConfig(msg *Message) (*Message, error) {
-	var data struct {
-		ConfigType string `json:"config_type"`
-		Content    string `json:"content"`
-		Restart    bool   `json:"restart"`
-		TargetPath string `json:"target_path"` // 目标路径，如 /opt/sboard/sing-box
-	}
-	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		return nil, fmt.Errorf("解析配置同步消息失败: %w", err)
-	}
-
-	// 确定配置路径：优先使用面板传入的 TargetPath，回退到本地 ConfigDir
-	var configPath string
-	var serviceName string
-	configDir := a.config.ConfigDir
-	if data.TargetPath != "" {
-		configDir = data.TargetPath
-	}
-
-	// 路径穿越防护：限制写入在允许的目录范围
-	allowedDirs := []string{a.config.ConfigDir, a.config.CorePath, filepath.Dir(a.config.CorePath), "/opt/sboard"}
-	safeDir, err := safeResolvePath(configDir, allowedDirs)
-	if err != nil {
-		return nil, fmt.Errorf("配置目录不安全: %w", err)
-	}
-	coreType := strings.ToLower(data.ConfigType)
-	switch coreType {
-	case "sing-box":
-		configPath = filepath.Join(safeDir, "config.json")
-		serviceName = "sing-box"
-	default:
-		return nil, fmt.Errorf("未知配置类型: %s", data.ConfigType)
-	}
-
-	corePath := resolveCoreBinary(a.config.CorePath, safeDir, coreType)
-	installed, err := installValidatedConfig(configPath, []byte(data.Content), func(stagedPath string) error {
-		return validateCoreConfig(corePath, stagedPath, safeDir)
-	})
-	if err != nil {
-		log.Printf("配置校验或安装失败，保留当前配置: %v", err)
-		return nil, err
-	}
-
-	// 计算配置版本
-	hash := md5.Sum([]byte(data.Content))
-	configVersion := hex.EncodeToString(hash[:])
-
-	if installed.Changed() {
-		log.Printf("配置已同步: %s (版本: %s)", configPath, configVersion[:8])
-	} else {
-		log.Printf("配置未变化，跳过写入: %s (版本: %s)", configPath, configVersion[:8])
-	}
-
-	restarted := false
-	// 重启服务 (使用平台特定的服务管理器)
-	//
-	// 配置与磁盘上完全一致时不重启：部署按钮是强推送、会无条件走到这里，
-	// 但重启 sing-box 会瞬断所有已建立的连接。内容一字未变时重启毫无收益。
-	if data.Restart {
-		if !installed.Changed() {
-			log.Printf("配置无变化，跳过重启: %s", serviceName)
-		} else if err := serviceManager.RestartService(serviceName); err != nil {
-			log.Printf("重启服务失败，正在恢复旧配置: %v", err)
-			if rollbackErr := rollbackInstalledConfig(installed); rollbackErr != nil {
-				log.Printf("恢复旧配置失败: %v", rollbackErr)
-				return nil, fmt.Errorf("重启失败: %w；恢复旧配置失败: %v", err, rollbackErr)
-			}
-			if restartErr := serviceManager.RestartService(serviceName); restartErr != nil {
-				log.Printf("恢复旧配置后重启服务失败: %v", restartErr)
-				return nil, fmt.Errorf("重启失败: %w；恢复旧配置后重启失败: %v", err, restartErr)
-			}
-			return nil, fmt.Errorf("重启失败: %w，已恢复旧配置", err)
-		} else {
-			restarted = true
-			log.Printf("服务已重启: %s", serviceName)
-		}
-	}
-
-	respData, _ := json.Marshal(map[string]interface{}{
-		"success":        true,
-		"path":           configPath,
-		"config_version": configVersion,
-		"changed":        installed.Changed(),
-		"restarted":      restarted,
-	})
-	return &Message{Type: MsgTypeCommandResp, Data: respData}, nil
-}
-
 func (a *Agent) handleRestart(msg *Message) (*Message, error) {
 	var data struct {
 		Service string `json:"service"`
@@ -1197,6 +1119,8 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 		CoreType   string `json:"core_type"`   // sing-box
 		TargetPath string `json:"target_path"` // 目标安装路径
 		Config     string `json:"config"`      // 配置文件内容
+		CertPEM    string `json:"cert_pem,omitempty"`
+		KeyPEM     string `json:"key_pem,omitempty"`
 	}
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
 		return nil, fmt.Errorf("解析部署参数失败: %v", err)
@@ -1264,6 +1188,9 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 		case "deploy.sh":
 			// 跳过 deploy.sh（不再需要）
 			return nil
+		case certFileName, keyFileName:
+			// 证书由面板下发，不使用内嵌的（agent 不再内嵌证书资源）
+			return nil
 		}
 
 		// 跳过 .service 文件（Linux 特有，由 ServiceManager 处理）
@@ -1328,13 +1255,34 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 		return nil, fmt.Errorf("未找到 %s 二进制文件，请确保 Agent 编译时已嵌入对应平台的核心", data.CoreType)
 	}
 
-	// 7. 用指令中的配置内容覆盖配置文件
-	if data.Config != "" {
-		configPath := filepath.Join(safePath, configFileName)
-		if err := os.WriteFile(configPath, []byte(data.Config), 0600); err != nil {
-			return nil, fmt.Errorf("写入配置文件失败: %v", err)
+	// 证书：面板是唯一来源，优先使用指令下发的证书文件。
+	if data.CertPEM != "" && data.KeyPEM != "" {
+		if _, _, err := installCertificate(safePath, data.CertPEM, data.KeyPEM); err != nil {
+			return nil, fmt.Errorf("安装证书失败: %v", err)
 		}
-		log.Printf("  更新配置文件: %s", configPath)
+		log.Printf("  已安装证书: %s", filepath.Join(safePath, certFileName))
+	}
+
+	// 7. 写入配置：校验通过才替换，且内容与磁盘一致时不触发重启。
+	//
+	// 部署是唯一路径，面板的自动广播也走这里（每 3 秒防抖后触发），
+	// 所以绝不能无条件重启——那会掐断该节点上所有用户的连接。
+	corePath := resolveCoreBinary(a.config.CorePath, safePath, data.CoreType)
+	configPath := filepath.Join(safePath, configFileName)
+	configChanged := false
+	if data.Config != "" {
+		installed, err := installValidatedConfig(configPath, []byte(data.Config), func(stagedPath string) error {
+			return validateCoreConfig(corePath, stagedPath, safePath)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("配置校验或安装失败: %v", err)
+		}
+		configChanged = installed.Changed()
+		if configChanged {
+			log.Printf("  更新配置文件: %s", configPath)
+		} else {
+			log.Printf("  配置无变化，跳过写入: %s", configPath)
+		}
 	}
 
 	// 5. 安装并启动服务 (使用平台特定的 ServiceManager)
@@ -1344,18 +1292,28 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 	}
 
 	// 6. 启动或重启服务
+	//
+	// 服务没在运行时必须启动；在运行且配置没变化时跳过重启：
+	// 证书是热加载的，配置文件一字未改时重启只会瞬断连接、没有任何收益。
+	restarted := false
 	if serviceManager.IsServiceRunning(serviceName) {
-		log.Printf("  服务 %s 正在运行，执行重启...", serviceName)
-		if err := serviceManager.RestartService(serviceName); err != nil {
-			log.Printf("  重启服务失败: %v", err)
+		if !configChanged {
+			log.Printf("  配置无变化，跳过重启: %s", serviceName)
 		} else {
-			log.Printf("  服务 %s 已重启", serviceName)
+			log.Printf("  服务 %s 正在运行，执行重启...", serviceName)
+			if err := serviceManager.RestartService(serviceName); err != nil {
+				log.Printf("  重启服务失败: %v", err)
+			} else {
+				restarted = true
+				log.Printf("  服务 %s 已重启", serviceName)
+			}
 		}
 	} else {
 		log.Printf("  启动服务: %s", serviceName)
 		if err := serviceManager.StartService(serviceName); err != nil {
 			log.Printf("  启动服务失败: %v", err)
 		} else {
+			restarted = true
 			log.Printf("  服务 %s 已启动", serviceName)
 		}
 	}
@@ -1363,7 +1321,7 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 	// 7. 检查服务状态
 	currentRunning := serviceManager.IsServiceRunning(serviceName)
 
-	log.Printf("部署完成! %s: %v", serviceName, currentRunning)
+	log.Printf("部署完成! %s: %v (配置变化: %v, 重启: %v)", serviceName, currentRunning, configChanged, restarted)
 
 	// 构建响应
 	respData := map[string]interface{}{
@@ -1373,6 +1331,8 @@ func (a *Agent) handleDeployCore(msg *Message) (*Message, error) {
 		"service_name": serviceName,
 		"running":      currentRunning,
 		"platform":     runtime.GOOS + "/" + runtime.GOARCH,
+		"changed":      configChanged,
+		"restarted":    restarted,
 	}
 	rawData, _ := json.Marshal(respData)
 	return &Message{
@@ -1389,6 +1349,50 @@ const (
 	fallbackUpdateRepo = "anti-rainer/sboard"
 	fallbackUpdateProxy = "https://ghfast.top/"
 )
+
+// handleCertUpdate 处理证书刷新指令（单向通知，不回传结果）。
+//
+// 面板每天推一次。agent 只在证书缺失或剩余有效期 ≤ 阈值时才写入，
+// 其余情况无动作。sing-box 的 certificate_path 热加载，不需要重启服务。
+func (a *Agent) handleCertUpdate(msg *Message) {
+	var data CertUpdateData
+	if msg == nil || msg.Data == nil {
+		log.Printf("证书刷新指令缺少数据，忽略")
+		return
+	}
+	if err := json.Unmarshal(msg.Data, &data); err != nil {
+		log.Printf("解析证书刷新指令失败: %v", err)
+		return
+	}
+	if data.CertPEM == "" || data.KeyPEM == "" {
+		log.Printf("证书刷新指令内容为空，忽略")
+		return
+	}
+
+	dir := data.TargetPath
+	if dir == "" {
+		dir = a.config.ConfigDir
+	}
+	allowedDirs := []string{a.config.ConfigDir, a.config.CorePath, filepath.Dir(a.config.CorePath), "/opt/sboard"}
+	safeDir, err := safeResolvePath(dir, allowedDirs)
+	if err != nil {
+		log.Printf("证书目录不安全，忽略本次刷新: %v", err)
+		return
+	}
+
+	updated, daysLeft, certPath, err := maybeRefreshCertificate(
+		safeDir, data.CertPEM, data.KeyPEM, data.RenewBeforeDays, time.Now())
+	if err != nil {
+		log.Printf("刷新证书失败: %v", err)
+		return
+	}
+	if !updated {
+		log.Printf("证书剩余 %d 天，超过阈值 %d 天，无需更新", daysLeft, data.RenewBeforeDays)
+		return
+	}
+	// sing-box 自动重载 certificate_path，无需重启服务
+	log.Printf("证书已就绪: %s（剩余 %d 天），sing-box 将自动加载新证书，未重启服务", certPath, daysLeft)
+}
 
 // handleSelfUpdate 处理自我更新指令（单向通知，不返回响应）
 func (a *Agent) handleSelfUpdate(msg *Message) {
