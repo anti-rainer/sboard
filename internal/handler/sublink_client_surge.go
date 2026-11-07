@@ -108,10 +108,7 @@ func buildSurgeProxyLine(name, host string, port int, node *database.InboundNode
 		surgeTLS(&kv, node, false)
 
 	case "hysteria2":
-		pwd := node.Hy2Password
-		if pwd == "" {
-			pwd = uuid
-		}
+		pwd := uuid
 		head = fmt.Sprintf("hysteria2, %s, %d, password=%s", host, port, pwd)
 		surgeTLS(&kv, node, false)
 		if node.Hy2Obfs != "" && node.Hy2ObfsPassword != "" {
@@ -119,10 +116,7 @@ func buildSurgeProxyLine(name, host string, port int, node *database.InboundNode
 		}
 
 	case "tuic":
-		pwd := node.TuicPassword
-		if pwd == "" {
-			pwd = uuid
-		}
+		pwd := uuid
 		head = fmt.Sprintf("tuic-v5, %s, %d, uuid=%s, password=%s", host, port, uuid, pwd)
 		surgeTLS(&kv, node, false)
 		kv = append(kv, "alpn=h3")

@@ -48,14 +48,14 @@ type CreateNodeRequest struct {
 	SsPassword string `json:"ss_password"`
 
 	// Hysteria2
-	Hy2Password     string `json:"hy2_password"`
+
 	Hy2UpMbps       int    `json:"hy2_up_mbps"`
 	Hy2DownMbps     int    `json:"hy2_down_mbps"`
 	Hy2Obfs         string `json:"hy2_obfs"`
 	Hy2ObfsPassword string `json:"hy2_obfs_password"`
 
 	// TUIC（QUIC 系，强制 TLS）
-	TuicPassword   string `json:"tuic_password"`
+
 	TuicCongestion string `json:"tuic_congestion"`
 	TuicZeroRtt    bool   `json:"tuic_zero_rtt"`
 
@@ -99,14 +99,14 @@ type UpdateNodeRequest struct {
 	SsPassword string `json:"ss_password"`
 
 	// Hysteria2
-	Hy2Password     string `json:"hy2_password"`
+
 	Hy2UpMbps       int    `json:"hy2_up_mbps"`
 	Hy2DownMbps     int    `json:"hy2_down_mbps"`
 	Hy2Obfs         string `json:"hy2_obfs"`
 	Hy2ObfsPassword string `json:"hy2_obfs_password"`
 
 	// TUIC（QUIC 系，强制 TLS）
-	TuicPassword   string `json:"tuic_password"`
+
 	TuicCongestion string `json:"tuic_congestion"`
 	TuicZeroRtt    bool   `json:"tuic_zero_rtt"`
 
@@ -254,9 +254,6 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 	if req.TuicCongestion == "" {
 		req.TuicCongestion = "bbr"
 	}
-	if req.Protocol == "tuic" && req.TuicPassword == "" {
-		req.TuicPassword = generateRandomPassword(24)
-	}
 
 	// 如果启用 Reality 且 short_id 为空，自动生成随机 short_id
 	if req.RealityEnabled && req.RealityShortId == "" {
@@ -305,12 +302,10 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 		Flow:             req.Flow,
 		SsMethod:         req.SsMethod,
 		SsPassword:       req.SsPassword,
-		Hy2Password:      req.Hy2Password,
 		Hy2UpMbps:        req.Hy2UpMbps,
 		Hy2DownMbps:      req.Hy2DownMbps,
 		Hy2Obfs:          req.Hy2Obfs,
 		Hy2ObfsPassword:  req.Hy2ObfsPassword,
-		TuicPassword:     req.TuicPassword,
 		TuicCongestion:   req.TuicCongestion,
 		TuicZeroRtt:      req.TuicZeroRtt,
 		Enabled:          req.Enabled,
@@ -558,10 +553,6 @@ func (s *Server) handleUpdateNode(c *gin.Context) {
 		configChanged = true
 	}
 	node.SsPassword = req.SsPassword
-	if req.Hy2Password != node.Hy2Password {
-		configChanged = true
-	}
-	node.Hy2Password = req.Hy2Password
 	if req.Hy2UpMbps != node.Hy2UpMbps {
 		configChanged = true
 	}
@@ -579,10 +570,6 @@ func (s *Server) handleUpdateNode(c *gin.Context) {
 	}
 	node.Hy2ObfsPassword = req.Hy2ObfsPassword
 
-	if req.TuicPassword != node.TuicPassword {
-		configChanged = true
-	}
-	node.TuicPassword = req.TuicPassword
 	if req.TuicCongestion != node.TuicCongestion {
 		configChanged = true
 	}

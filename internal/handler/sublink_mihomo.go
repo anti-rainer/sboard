@@ -222,9 +222,6 @@ func buildMihomoProxy(server *database.Server, node *database.InboundNode, nc *d
 
 	case "hysteria2":
 		password := p.UUID
-		if node.Hy2Password != "" {
-			password = node.Hy2Password
-		}
 		add("type", "hysteria2")
 		add("name", p.Name)
 		add("server", p.Host)
@@ -252,9 +249,6 @@ func buildMihomoProxy(server *database.Server, node *database.InboundNode, nc *d
 
 	case "tuic":
 		tuicPassword := p.UUID
-		if node.TuicPassword != "" {
-			tuicPassword = node.TuicPassword
-		}
 		congestion := node.TuicCongestion
 		if congestion == "" {
 			congestion = "bbr"

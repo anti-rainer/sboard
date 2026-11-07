@@ -223,9 +223,6 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 
 	case "hysteria2":
 		password := p.UUID
-		if node.Hy2Password != "" {
-			password = node.Hy2Password
-		}
 		params := url.Values{}
 		if node.ServerName != "" {
 			params.Set("sni", node.ServerName)
@@ -248,9 +245,6 @@ func buildV2RayLink(server *database.Server, node *database.InboundNode, nc *dat
 
 	case "tuic":
 		tuicPassword := p.UUID
-		if node.TuicPassword != "" {
-			tuicPassword = node.TuicPassword
-		}
 		congestion := node.TuicCongestion
 		if congestion == "" {
 			congestion = "bbr"

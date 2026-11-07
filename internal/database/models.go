@@ -342,14 +342,15 @@ type InboundNode struct {
 	SsPassword string `gorm:"size:100" json:"ss_password"` // 随机生成的密码
 
 	// Hysteria2 配置
-	Hy2Password     string `gorm:"size:100" json:"hy2_password"`
+	// 注意：没有「节点级密码」字段。sing-box 的 users[].password 是每个用户
+	// 各自的密码，早期用单一共享密码凑多用户是当年不支持 users 的产物，已废弃。
 	Hy2UpMbps       int    `gorm:"default:0" json:"hy2_up_mbps"`
 	Hy2DownMbps     int    `gorm:"default:0" json:"hy2_down_mbps"`
 	Hy2Obfs         string `gorm:"size:20" json:"hy2_obfs"` // salamander or empty
 	Hy2ObfsPassword string `gorm:"size:100" json:"hy2_obfs_password"`
 
 	// TUIC 配置（QUIC 系，强制 TLS）
-	TuicPassword   string `gorm:"size:100" json:"tuic_password"`
+	// 同 hysteria2：密码逐用户独立，没有节点级共享密码。
 	TuicCongestion string `gorm:"size:20;default:bbr" json:"tuic_congestion"` // bbr/cubic/new_reno
 	TuicZeroRtt    bool   `gorm:"default:false" json:"tuic_zero_rtt"`
 

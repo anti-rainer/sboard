@@ -191,21 +191,14 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 			// 主密钥已在 inbound 级 password 字段设置）
 			userEntry["password"] = generateSS2022UserKey(user.UUID, node.SsMethod)
 		case "hysteria2":
-			if node.Hy2Password != "" {
-				userEntry["password"] = node.Hy2Password
-			} else {
-				userEntry["password"] = user.UUID
-			}
+			// 密码逐用户独立：sing-box 的 users[].password 是每个用户自己的密码
+			userEntry["password"] = user.UUID
 		case "naive":
 			userEntry["username"] = user.Name
 			userEntry["password"] = user.UUID
 		case "tuic":
 			userEntry["uuid"] = user.UUID
-			if node.TuicPassword != "" {
-				userEntry["password"] = node.TuicPassword
-			} else {
-				userEntry["password"] = user.UUID
-			}
+			userEntry["password"] = user.UUID
 		case "socks":
 			// 参照 233boy：Socks 用户结构只有 username/password，不接受 name
 			delete(userEntry, "name")
@@ -771,18 +764,13 @@ func buildUserEntry(protocol, name, uuid, flow string, node *database.InboundNod
 		// Shadowsocks 用户密钥 = 单用户密钥（同第一处）
 		userEntry["password"] = generateSS2022UserKey(uuid, node.SsMethod)
 	case "hysteria2":
-		if node.Hy2Password != "" {
-			userEntry["password"] = node.Hy2Password
-		} else {
-			userEntry["password"] = uuid
-		}
+		// 每个用户必须是自己的密码。共用节点级密码会让所有用户密码相同，
+		// 既无法区分用户，auth_user 分流也永远只命中同一个名字。
+		userEntry["password"] = uuid
 	case "tuic":
 		userEntry["uuid"] = uuid
-		if node.TuicPassword != "" {
-			userEntry["password"] = node.TuicPassword
-		} else {
-			userEntry["password"] = uuid
-		}
+		// 同 hysteria2：密码必须逐用户独立，否则多用户退化成一个共享密码。
+		userEntry["password"] = uuid
 	case "socks":
 		// 参照 233boy：Socks 用户结构只有 username/password，不接受 name
 		delete(userEntry, "name")

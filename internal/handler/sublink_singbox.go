@@ -675,9 +675,6 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 
 	case "hysteria2":
 		password := p.UUID
-		if node.Hy2Password != "" {
-			password = node.Hy2Password
-		}
 		outbound["type"] = "hysteria2"
 		outbound["password"] = password
 		// 参照 233boy：未显式配置带宽时不输出，避免默认限速
@@ -708,9 +705,6 @@ func buildSingBoxOutbound(server *database.Server, node *database.InboundNode, n
 	case "tuic":
 		outbound["type"] = "tuic"
 		tuicPassword := p.UUID
-		if node.TuicPassword != "" {
-			tuicPassword = node.TuicPassword
-		}
 		outbound["uuid"] = p.UUID
 		outbound["password"] = tuicPassword
 		congestion := node.TuicCongestion

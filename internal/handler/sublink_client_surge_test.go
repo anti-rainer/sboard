@@ -30,10 +30,8 @@ func newSurgeTestNode(protocol string) *database.InboundNode {
 		TransportType:   "tcp",
 		SsMethod:        "aes-256-gcm",
 		SsPassword:      "sspass",
-		Hy2Password:     "hy2pass",
 		Hy2Obfs:         "salamander",
 		Hy2ObfsPassword: "obfspass",
-		TuicPassword:    "tuicpass",
 	}
 	return n
 }
@@ -71,13 +69,13 @@ func TestBuildSurgeProxyLine(t *testing.T) {
 		{
 			name: "hysteria2 用 password 不是 auth", protocol: "hysteria2",
 			wantHead: "hysteria2, 1.2.3.4, 8388",
-			mustHave: []string{"password=hy2pass", "obfs-password=obfspass"},
+			mustHave: []string{"password=" + uuid, "obfs-password=obfspass"},
 			mustNot:  []string{"auth="},
 		},
 		{
 			name: "tuic 必须 tuic-v5 且 uuid+password", protocol: "tuic",
 			wantHead: "tuic-v5, 1.2.3.4, 8388",
-			mustHave: []string{"uuid=" + uuid, "password=tuicpass", "alpn=h3"},
+			mustHave: []string{"uuid=" + uuid, "password=" + uuid, "alpn=h3"},
 			mustNot:  []string{"congestion-controller"},
 		},
 		{

@@ -181,7 +181,6 @@ export interface Node {
   flow: string
   ss_method: string
   ss_password: string
-  hy2_password: string
   hy2_up_mbps: number
   hy2_down_mbps: number
   hy2_obfs: string

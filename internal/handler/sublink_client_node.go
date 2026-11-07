@@ -110,10 +110,7 @@ func buildShadowrocketProxyLine(name, host string, port int, node *database.Inbo
 		kv = append(kv, "skip-cert-verify=true")
 
 	case "hysteria2":
-		pwd := node.Hy2Password
-		if pwd == "" {
-			pwd = uuid
-		}
+		pwd := uuid
 		head = fmt.Sprintf("hysteria2, %s, %d, auth=%s", host, port, pwd)
 		if sni != "" {
 			kv = append(kv, "peer="+sni)
@@ -124,10 +121,7 @@ func buildShadowrocketProxyLine(name, host string, port int, node *database.Inbo
 		}
 
 	case "tuic":
-		pwd := node.TuicPassword
-		if pwd == "" {
-			pwd = uuid
-		}
+		pwd := uuid
 		congestion := node.TuicCongestion
 		if congestion == "" {
 			congestion = "bbr"
@@ -379,10 +373,7 @@ func buildLoonProxyLine(name, host string, port int, node *database.InboundNode,
 		parts = append(parts, "skip-cert-verify=true", "udp=true")
 
 	case "hysteria2":
-		pwd := node.Hy2Password
-		if pwd == "" {
-			pwd = uuid
-		}
+		pwd := uuid
 		parts = []string{"Hysteria2", host, fmt.Sprint(port), loonQuote(pwd)}
 		if sni != "" {
 			parts = append(parts, "sni="+sni)
@@ -393,10 +384,7 @@ func buildLoonProxyLine(name, host string, port int, node *database.InboundNode,
 		}
 
 	case "tuic":
-		pwd := node.TuicPassword
-		if pwd == "" {
-			pwd = uuid
-		}
+		pwd := uuid
 		parts = []string{"TUIC", host, fmt.Sprint(port), loonQuote(uuid), loonQuote(pwd)}
 		if sni != "" {
 			parts = append(parts, "sni="+sni)

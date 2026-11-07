@@ -253,9 +253,10 @@
                 
                 <h6 class="mb-2"><i class="bi bi-shield-lock"></i> 认证配置</h6>
                 <div class="mb-3">
-                  <label>认证密码</label>
-                  <input type="text" class="form-control" v-model="formData.hy2_password" placeholder="留空则使用用户UUID">
-                  <small class="text-muted">留空时将使用用户UUID作为密码（推荐使用强随机密码）</small>
+                  <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    每个用户使用各自的密码（即用户 UUID），无需在此设置共享密码。
+                  </small>
                 </div>
                 
                 <h6 class="mb-2"><i class="bi bi-speedometer2"></i> Brutal 速率控制</h6>
@@ -299,9 +300,10 @@
                   </ul>
                 </div>
                 <div class="mb-2">
-                  <label>认证密码</label>
-                  <input type="text" class="form-control" v-model="formData.tuic_password" placeholder="留空则使用用户UUID">
-                  <small class="text-muted">留空时使用用户 UUID 作为密码</small>
+                  <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    每个用户使用各自的密码（即用户 UUID），无需在此设置共享密码。
+                  </small>
                 </div>
                 <div class="mb-2">
                   <label>拥塞控制算法</label>
@@ -539,12 +541,10 @@ function getDefaultFormData() {
     flow: '',
     ss_method: '2022-blake3-aes-256-gcm',
     ss_password: '',
-    hy2_password: '',
     hy2_up_mbps: 0,
     hy2_down_mbps: 0,
     hy2_obfs: '',
     hy2_obfs_password: '',
-    tuic_password: '',
     tuic_congestion: 'bbr',
     tuic_zero_rtt: false,
     notes: '',
@@ -669,12 +669,10 @@ function openEditModal(node: Node) {
     flow: node.flow || '',
     ss_method: node.ss_method || '2022-blake3-aes-256-gcm',
     ss_password: node.ss_password || '',
-    hy2_password: node.hy2_password || '',
     hy2_up_mbps: node.hy2_up_mbps || 0,
     hy2_down_mbps: node.hy2_down_mbps || 0,
     hy2_obfs: node.hy2_obfs || '',
     hy2_obfs_password: node.hy2_obfs_password || '',
-    tuic_password: (node as any).tuic_password || '',
     tuic_congestion: (node as any).tuic_congestion || 'bbr',
     tuic_zero_rtt: (node as any).tuic_zero_rtt || false,
     notes: node.notes || '',
@@ -733,12 +731,10 @@ async function saveNode() {
       flow: formData.value.flow,
       ss_method: formData.value.ss_method,
       ss_password: formData.value.ss_password,
-      hy2_password: formData.value.hy2_password,
       hy2_up_mbps: formData.value.hy2_up_mbps,
       hy2_down_mbps: formData.value.hy2_down_mbps,
       hy2_obfs: formData.value.hy2_obfs,
       hy2_obfs_password: formData.value.hy2_obfs_password,
-      tuic_password: formData.value.tuic_password,
       tuic_congestion: formData.value.tuic_congestion,
       tuic_zero_rtt: formData.value.tuic_zero_rtt,
       notes: formData.value.notes,
