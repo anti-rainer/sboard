@@ -257,6 +257,9 @@ export interface Server {
   agent_arch?: string
   /** agent 所属构建批次，与面板 build_id 相同即视为同版本 */
   agent_build_id?: string
+  /** 最近一次 Agent 自我更新的结果，失败时带原因 */
+  agent_update_status?: string
+  agent_update_status_at?: string
   /** agent 二进制文件修改时间（RFC3339） */
   agent_built_at?: string
   agent_online: boolean

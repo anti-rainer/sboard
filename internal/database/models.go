@@ -504,6 +504,9 @@ type Server struct {
 	AgentArch string `gorm:"size:16" json:"agent_arch"`
 	// AgentBuildID agent 上报的构建批次标识，与面板 BuildID 相同即视为同版本。
 	AgentBuildID string `gorm:"size:64" json:"agent_build_id"`
+	// AgentUpdateStatus 最近一次 Agent 自我更新的结果，失败时带原因
+	AgentUpdateStatus   string `gorm:"size:255" json:"agent_update_status"`
+	AgentUpdateStatusAt string `gorm:"size:32" json:"agent_update_status_at"`
 	LastHeartbeat *time.Time `json:"last_heartbeat"`                    // 最后心跳时间
 
 	// 服务器状态 (Agent 上报)

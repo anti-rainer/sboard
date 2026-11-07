@@ -30,8 +30,23 @@ var (
 	selfHashBuiltAt string
 )
 
-// selfExecutablePath 返回当前进程的可执行文件路径（解析符号链接）。
+// selfExecutablePath 返回「当前进程正在运行的那份二进制」的路径。
+//
+// 关键：必须走 /proc/self/exe，不能用 os.Executable() 拼出来的安装路径。
+//
+// 自我更新是「下载到同目录临时文件 → rename 覆盖目标路径」。rename 只换
+// 目录项，正在运行的进程仍持有旧 inode。此时若按安装路径去算 hash，读到
+// 的是磁盘上的新文件，而上报的心跳却来自旧进程 —— 面板会据此认定
+// 「已更新到最新」，实际新版本根本没生效。
+// 现场表现：进程 PID 不变、/proc/PID/exe 带 " (deleted)"，但面板显示
+// 的 hash 已经是新产物，看不出任何异常。
+//
+// /proc/self/exe 指向进程真实在执行的 inode，替换前后都准确。
 func selfExecutablePath() string {
+	if p, err := filepath.EvalSymlinks("/proc/self/exe"); err == nil {
+		return p
+	}
+	// 非 Linux 或 /proc 不可用时退回原路径
 	exe, err := os.Executable()
 	if err != nil {
 		return ""
@@ -112,6 +127,12 @@ func selfBinaryInfo() map[string]interface{} {
 		"build_id": BuildID,
 	}
 	selfHashMu.Unlock()
+
+	// 最近一次自我更新的结果，让面板能看到失败原因而不是只看到「发过指令」
+	if text, at := updateStatusInfo(); text != "" {
+		info["update_status"] = text
+		info["update_status_at"] = at
+	}
 	return info
 }
 

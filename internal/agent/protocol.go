@@ -72,6 +72,10 @@ type HeartbeatData struct {
 	// BuildID agent 所属构建批次，与面板同批次时值相同。
 	// 跨架构必须用它比对：二进制 hash 因架构不同天然不同。
 	BuildID string `json:"build_id,omitempty"`
+	// UpdateStatus 最近一次自我更新的结果（"下载:失败 - ..." 这类），
+	// 让面板能看到 agent 更新卡在哪一步
+	UpdateStatus   string `json:"update_status,omitempty"`
+	UpdateStatusAt string `json:"update_status_at,omitempty"`
 	LocalIP        string  `json:"local_ip"`         // 本机 IPv4
 	LocalIPv6      string  `json:"local_ip_v6"`      // 本机 IPv6
 }

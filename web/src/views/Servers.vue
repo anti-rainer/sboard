@@ -1866,11 +1866,18 @@ async function copyToClipboard(text: string) {
  * hash 必然不同，按 hash 比较会把「正常架构差异」误报成版本不一致
  * （实例：x86 主机都是 4a7a8218…，ARM 路由是 a86819cc…，均属最新）。
  */
-/** 不一致标签的悬浮说明 */
+/** 升级按钮的悬浮说明 */
 function mismatchTip(server: ServerWithState): string {
-  return `agent 构建标识: ${server.agent_build_id || '未上报'}\n`
-    + `面板构建标识: ${panelBuildId || '未知'}\n`
-    + '两者不同说明该机器未更新到当前发布'
+  const lines = [
+    `agent 构建标识: ${server.agent_build_id || '未上报'}`,
+    `面板构建标识: ${panelBuildId || '未知'}`,
+  ]
+  // 有更新失败记录时直接展示原因，省得去机器上翻日志
+  if (server.agent_update_status) {
+    lines.push(`上次更新: ${server.agent_update_status}`)
+  }
+  lines.push('点击给这台机器下发 Agent 更新')
+  return lines.join('\n')
 }
 
 function hashMismatch(server: ServerWithState): boolean {

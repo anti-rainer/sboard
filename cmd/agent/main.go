@@ -1413,6 +1413,13 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 
 	log.Printf("开始自我更新 (平台: %s/%s)", runtime.GOOS, runtime.GOARCH)
 
+	// 顺手清理历史版本遗留的临时/备份文件。
+	//
+	// 老版本的自更新会留下 sboard-agent.bak（近百 MB）以及中断时残留的
+	// .zip / .checksums.txt / .new。这些文件不会自动消失，在多台机器上
+	// 累积成实质的磁盘占用。这里每次更新前清一遍，属于顺带的卫生动作。
+	cleanupUpdateLeftovers()
+
 	// 优先使用面板下发的参数
 	var cfg SelfUpdateData
 	if msg != nil && msg.Data != nil {
@@ -1472,6 +1479,7 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 	// 校验文件从 GitHub 直取，避免下载代理同时控制制品和校验值
 	releaseURL := fmt.Sprintf("https://github.com/%s/releases/%s", repo, releaseType)
 	checksumsURL := releaseURL + "/checksums.txt"
+	setUpdUpdateStatus("开始", nil)
 
 	// 依次尝试各个加速前缀，最后一个候选是直连（空前缀）
 	var candidates []string
@@ -1506,6 +1514,7 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 	tempChecksumsPath := execPath + ".checksums.txt"
 	if err := downloadFile(checksumsURL, tempChecksumsPath); err != nil {
 		log.Printf("下载校验文件失败，取消更新: %v", err)
+		setUpdUpdateStatus("下载校验文件", err)
 		os.Remove(tempChecksumsPath)
 		return
 	}
@@ -1535,6 +1544,7 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 	}
 	if !downloaded {
 		log.Printf("所有下载地址均失败: %v", dlErr)
+		setUpdUpdateStatus("下载更新包", dlErr)
 		os.Remove(tempZipPath)
 		return
 	}
@@ -1542,6 +1552,7 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 
 	if err := verifyFileChecksum(tempZipPath, tempChecksumsPath, zipFileName); err != nil {
 		log.Printf("更新包校验失败，取消更新: %v", err)
+		setUpdUpdateStatus("SHA256校验", err)
 		return
 	}
 	log.Printf("更新包 SHA-256 校验通过")
@@ -1555,6 +1566,7 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 	tempPath := execPath + ".new"
 	if err := extractFromZip(tempZipPath, binaryName, tempPath); err != nil {
 		log.Printf("解压新版本失败: %v", err)
+		setUpdUpdateStatus("解压", err)
 		os.Remove(tempPath)
 		return
 	}
@@ -1577,17 +1589,140 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 	// 代价是失败时无法自动回滚二进制 —— 由面板重新下发 self_update 即可。
 	if err := os.Rename(tempPath, execPath); err != nil {
 		log.Printf("替换新版本失败: %v", err)
+		setUpdUpdateStatus("替换二进制", err)
 		os.Remove(tempPath)
 		return
 	}
 
+	setUpdUpdateStatus("替换二进制", nil)
 	log.Printf("自我更新成功，正在重启服务...")
 
-	// 重启 agent 服务
-	if err := serviceManager.RestartService("sboard-agent"); err != nil {
-		log.Printf("重启服务失败: %v，尝试直接退出", err)
-		// 如果服务管理器重启失败，直接退出让 systemd 重启
-		os.Exit(0)
+	// 重启必须与当前进程彻底解耦。
+	//
+	// 直接在进程内调 RestartService 在 systemd 下能work（systemd 是外部
+	// 进程，负责 kill 再拉起），但在 OpenWrt procd 下会变成空操作：
+	// 重启命令是当前进程的子进程，它去 kill 的正是自己的父进程，
+	// 父进程此时又卡在 Wait 子进程退出，procd 收到 SIGTERM 后
+	// 以为实例还在跑，结果什么都没重启 —— 现象就是
+	// 「自我更新成功」打了日志，但 PID 不变、跑的还是已被删除的旧文件
+	// （/proc/PID/exe 带 " (deleted)"）。
+	//
+	// 改法：用 setsid 把「延迟重启 + 兜底自杀」丢到独立会话，
+	// 当前进程立刻返回，重启动作完全脱离父子关系。
+	restartDetachedWithFallback()
+
+	// 给后台脚本一点时间启动，然后主动退出，让监督进程拉起新二进制。
+	// 即便脚本因故没跑起来，这里的退出也能让 procd/systemd 的
+	// respawn/Restart 策略生效。
+	time.Sleep(500 * time.Millisecond)
+	os.Exit(0)
+}
+
+// restartDetachedWithFallback 在独立会话里重启 agent 服务。
+//
+// 脚本逻辑：
+//  1. 先 sleep 2 秒，确保当前进程已经退出、文件句柄已释放；
+//  2. 按 init 系统选择重启命令（procd/systemd/openrc/sysvinit 都覆盖）；
+//  3. 如果重启命令失败，再显式 stop 后 start 一次（procd 的 restart
+//     在实例状态不一致时会静默失效，stop+start 更可靠）。
+func restartDetachedWithFallback() {
+	script := buildAgentRestartScript()
+	cmd := exec.Command("sh", "-c", script)
+	cmd.SysProcAttr = detachSysProcAttr()
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Start(); err != nil {
+		log.Printf("启动重启脚本失败: %v（依赖监督进程自动拉起）", err)
+		return
+	}
+	_ = cmd.Process.Release()
+}
+
+// buildAgentRestartScript 生成与 init 系统无关的重启脚本。
+//
+// 不依赖 ServiceManager 的检测结果：现场可能是 BusyBox 环境，
+// 检测逻辑与真实 init 系统不一致（openwrt 就走错过）。
+// 这里直接按可执行文件存在性依次尝试，谁在就用谁。
+func buildAgentRestartScript() string {
+	return `sleep 2
+SERVICE=sboard-agent
+INIT=/etc/init.d/$SERVICE
+
+# 判定顺序很重要：OpenWrt 上 /etc/init.d/<svc> 是 procd 的 rc.common 脚本，
+# 而某些发行版（Gentoo/Alpine 之外的 sysvinit 系统）同样有 /etc/init.d 目录
+# 却没有 procd。所以先认 procd 的存在标志，再走 systemd，最后才回落。
+if [ -f /etc/openwrt_release ] && [ -x "$INIT" ]; then
+  # procd：restart 在实例状态不一致时会静默失效（返回 0 但没重启），
+  # 因此 restart 后必须确认进程真的在，否则补一次 start。
+  "$INIT" restart >/dev/null 2>&1
+  sleep 1
+  if ! kill -0 "$(cat /var/run/$SERVICE.pid 2>/dev/null)" 2>/dev/null; then
+    "$INIT" start >/dev/null 2>&1
+  fi
+  exit 0
+fi
+
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  systemctl restart $SERVICE >/dev/null 2>&1
+  exit 0
+fi
+
+if command -v rc-service >/dev/null 2>&1; then
+  rc-service $SERVICE restart >/dev/null 2>&1
+  exit 0
+fi
+
+if [ -x "$INIT" ]; then
+  "$INIT" restart >/dev/null 2>&1
+  exit 0
+fi
+`
+}
+
+// cleanupUpdateLeftovers 清理自我更新遗留的临时与备份文件。
+//
+// 只在「即将替换二进制」这条路径上调用，避免影响正常运行。
+// 用 EvalSymlinks 解析后的真实安装路径，防止符号链接安装时清错目录。
+func cleanupUpdateLeftovers() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	removeUpdateLeftoversIn(filepath.Dir(exe), filepath.Base(exe))
+}
+
+// removeUpdateLeftoversIn 在 dir 下清理属于 base 这个二进制的遗留文件。
+// 抽成独立函数便于测试，避免测试写满随机目录。
+func removeUpdateLeftoversIn(dir, base string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			continue
+		}
+		// 匹配：<binary>.bak、<binary>.bak-*、<binary>.zip、
+		//       <binary>.checksums.txt、<binary>.new
+		if !strings.HasPrefix(name, base+".") {
+			continue
+		}
+		suffix := strings.TrimPrefix(name, base+".")
+		switch {
+		case strings.HasPrefix(suffix, "bak"),
+			suffix == "zip",
+			suffix == "checksums.txt",
+			suffix == "new":
+			path := filepath.Join(dir, name)
+			if err := os.Remove(path); err == nil {
+				log.Printf("清理更新遗留文件: %s", name)
+			}
+		}
 	}
 }
 

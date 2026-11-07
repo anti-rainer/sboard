@@ -312,6 +312,10 @@ func (h *AgentHub) flushServerMetrics(serverID uint, data *agent.HeartbeatData) 
 	if data.BuildID != "" {
 		updates["agent_build_id"] = data.BuildID
 	}
+	if data.UpdateStatus != "" {
+		updates["agent_update_status"] = data.UpdateStatus
+		updates["agent_update_status_at"] = data.UpdateStatusAt
+	}
 	database.GetDB().Model(&database.Server{}).Where("id = ?", serverID).Updates(updates)
 
 	// 累加月度流量（使用精确差值）
