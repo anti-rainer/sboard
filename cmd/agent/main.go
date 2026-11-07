@@ -140,6 +140,13 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
+	// 启动时清一次更新遗留文件。
+	//
+	// 光靠「更新前清理」不够：残留在上一版 agent 里产生，而清理代码本身
+	// 要等下一次更新才跑到，于是这些近百 MB 的 .bak 会一直挂着
+	// （实测某台累积 354MB）。启动时一并清理，新版本一上线就回收空间。
+	cleanupUpdateLeftovers()
+
 	// 初始化流量统计模块
 	netStaticPath := filepath.Join(filepath.Dir(configPath), "net_static.json")
 	if err := netstatic.Init(netStaticPath); err != nil {
