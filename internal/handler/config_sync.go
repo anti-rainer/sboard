@@ -148,13 +148,6 @@ func (o *OrderedMap) MarshalJSON() ([]byte, error) {
 
 // ========== sing-box 入站构建 ==========
 
-// ssSupportsEIH 判断该 Shadowsocks 方法是否支持 sing-box 的 EIH 多用户。
-// sing-box 限制：Shadowsocks 2022 EIH support only available in AES ciphers，
-// 因此 2022-blake3-chacha20-poly1305 只能退化为单密码模式。
-func ssSupportsEIH(method string) bool {
-	return strings.HasPrefix(method, "2022-blake3-aes-")
-}
-
 // buildSingBoxInbound 构建 sing-box 入站配置 (有序字段)
 func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedMap {
 	inbound := NewOrderedMap()
@@ -217,10 +210,8 @@ func buildSingBoxInbound(node *database.InboundNode, users []NodeUser) *OrderedM
 		}
 		inbound.Set("method", method)
 		inbound.Set("password", node.SsPassword)
-		// sing-box 的 SS2022 EIH（多用户）仅支持 AES 系，chacha20-poly1305 只能单密码
-		if ssSupportsEIH(method) {
-			inbound.Set("users", userList)
-		}
+		// 只有 AES 系 method 会走到这里（白名单已排除 chacha20），都支持 EIH 多用户
+		inbound.Set("users", userList)
 	case "hysteria2":
 		inbound.Set("users", userList)
 		// 参照 233boy：默认不设带宽上限，仅在显式配置时才限制
@@ -611,10 +602,8 @@ func buildSingBoxInboundWithExtraUUIDs(node *database.InboundNode, relations []N
 		}
 		inbound.Set("method", method)
 		inbound.Set("password", node.SsPassword)
-		// sing-box 的 SS2022 EIH（多用户）仅支持 AES 系，chacha20-poly1305 只能单密码
-		if ssSupportsEIH(method) {
-			inbound.Set("users", userList)
-		}
+		// 只有 AES 系 method 会走到这里（白名单已排除 chacha20），都支持 EIH 多用户
+		inbound.Set("users", userList)
 	case "hysteria2":
 		inbound.Set("users", userList)
 		// 参照 233boy：默认不设带宽上限，仅在显式配置时才限制

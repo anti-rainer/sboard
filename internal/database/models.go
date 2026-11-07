@@ -338,7 +338,8 @@ type InboundNode struct {
 	Flow string `gorm:"size:50" json:"flow"`
 
 	// Shadowsocks 配置
-	SsMethod   string `gorm:"size:50" json:"ss_method"`    // aes-256-gcm/chacha20-ietf-poly1305/2022-blake3-aes-256-gcm
+	// SsMethod 入站加密方式，只允许 SS2022 的 AES 系（见 supportedSSMethods）。
+	SsMethod   string `gorm:"size:50" json:"ss_method"`
 	SsPassword string `gorm:"size:100" json:"ss_password"` // 随机生成的密码
 
 	// Hysteria2 配置

@@ -157,14 +157,21 @@ export const MAIN_PROTOCOLS: MainProtocolMeta[] = [
     id: 'shadowsocks',
     label: 'Shadowsocks',
     noTransport: true,
-    // 只支持 SS2022 的三种 method。传统加密（aes-128-gcm / aes-256-gcm /
-    // chacha20-ietf-poly1305 / xchacha20-ietf-poly1305）用「单密码多人共享」，
-    // 无法给每个用户下发独立密钥，已整体移除，不再进入站节点管理。
-    // 密钥长度由 method 决定：aes-128 → 16 字节，其余两种 → 32 字节。
+    // 只保留 SS2022 的两种 AES method。
+    //
+    // 传统加密（aes-128-gcm / aes-256-gcm / chacha20-ietf-poly1305 /
+    // xchacha20-ietf-poly1305）用「单密码多人共享」，无法给每个用户下发独立
+    // 密钥，已整体移除。
+    //
+    // chacha20-poly1305 同样移除：sing-box 源码里写死
+    //     Shadowsocks 2022 EIH support only available in AES ciphers
+    // 带 users 直接 FATAL invalid argument，只能退化成共享密码，多用户形同
+    // 虚设，落地分流也对它无效。落地出站仍可选它（加密方式由对端决定）。
+    //
+    // 密钥长度由 method 决定：aes-128 → 16 字节，aes-256 → 32 字节。
     branches: [
       { id: '2022-blake3-aes-128-gcm', label: '2022-AES128', hint: 'SS2022，16 字节密钥', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-128-gcm' } },
       { id: '2022-blake3-aes-256-gcm', label: '2022-AES256', hint: 'SS2022，32 字节密钥（推荐）', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-aes-256-gcm' } },
-      { id: '2022-blake3-chacha20-poly1305', label: '2022-ChaCha20', hint: 'SS2022，32 字节密钥，ARM 优化', patch: { tls: false, reality: false, transport: null, ssMethod: '2022-blake3-chacha20-poly1305' } },
     ],
   },
   {

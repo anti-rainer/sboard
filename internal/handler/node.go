@@ -269,8 +269,8 @@ func (s *Server) handleCreateNode(c *gin.Context) {
 		}
 		if !isSupportedSSMethod(req.SsMethod) {
 			errorJSON(c, http.StatusBadRequest,
-				"Shadowsocks 仅支持 SS2022：2022-blake3-aes-128-gcm / "+
-					"2022-blake3-aes-256-gcm / 2022-blake3-chacha20-poly1305")
+				"Shadowsocks 仅支持 SS2022 的 AES 系：2022-blake3-aes-128-gcm / "+
+					"2022-blake3-aes-256-gcm（chacha20 不支持多用户，已移除）")
 			return
 		}
 		if req.SsPassword == "" {
@@ -535,13 +535,13 @@ func (s *Server) handleUpdateNode(c *gin.Context) {
 	// 只接受 SS2022：传统加密无法按用户分发独立密钥
 	if node.Protocol == "shadowsocks" && req.SsMethod != "" && !isSupportedSSMethod(req.SsMethod) {
 		errorJSON(c, http.StatusBadRequest,
-			"Shadowsocks 仅支持 SS2022：2022-blake3-aes-128-gcm / "+
-				"2022-blake3-aes-256-gcm / 2022-blake3-chacha20-poly1305")
+			"Shadowsocks 仅支持 SS2022 的 AES 系：2022-blake3-aes-128-gcm / "+
+				"2022-blake3-aes-256-gcm（chacha20 不支持多用户，已移除）")
 		return
 	}
 	node.SsMethod = req.SsMethod
 	// 改加密方式不会自动换密钥，但 SS2022 的 key 长度随 method 固定
-	// （aes-128 要 16 字节、aes-256/chacha20 要 32 字节）。从 aes-256 改成
+	// （aes-128 要 16 字节、aes-256 要 32 字节）。从 aes-256 改成
 	// aes-128 而沿用旧密钥时，客户端会直接崩溃：
 	//   cipher: 2022-blake3-aes-128-gcm initialize error:
 	//   bad key length, required 16, got 32
@@ -759,10 +759,18 @@ func generateRandomPassword(length int) string {
 // 只保留 SS2022 三种：它们支持 EIH 多用户各自独立密钥，才能按用户下发订阅。
 // 传统加密（aes-128-gcm / aes-256-gcm / chacha20-ietf-poly1305 /
 // xchacha20-ietf-poly1305）是单密码全员共享，无法区分用户，已移除。
+// supportedSSMethods 允许作为入站的 Shadowsocks 加密方式。
+//
+// 只保留两种 AES：sing-box 的 SS2022 多用户（EIH）仅支持 AES 系，源码里写死
+//     Shadowsocks 2022 EIH support only available in AES ciphers
+// chacha20-poly1305 加上 users 会 FATAL invalid argument，只能退化为「单一
+// 密码多人共享」——所有用户密码相同、无法区分用户，auth_user 分流也永远
+// 只命中同一个名字。这种形同虚设的多用户没有存在意义，直接从入站移除。
+//
+// 落地出站仍可选 chacha20：那是连别人的服务端，加密方式由对方决定。
 var supportedSSMethods = map[string]bool{
-	"2022-blake3-aes-128-gcm":       true,
-	"2022-blake3-aes-256-gcm":       true,
-	"2022-blake3-chacha20-poly1305": true,
+	"2022-blake3-aes-128-gcm": true,
+	"2022-blake3-aes-256-gcm": true,
 }
 
 // isSupportedSSMethod 判断加密方式是否受支持

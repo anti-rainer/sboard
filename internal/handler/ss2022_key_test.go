@@ -101,13 +101,18 @@ func TestGenerateSS2022PasswordLengths(t *testing.T) {
 	}
 }
 
-// 入站节点管理只接受 SS2022 三种 method。
-// 传统加密是「单密码全员共享」，无法按用户下发独立密钥，已移除。
+// 入站节点管理只接受 SS2022 的 AES 系两种 method。
+//
+// 传统加密是「单密码全员共享」，无法按用户下发独立密钥；
+// 2022-blake3-chacha20-poly1305 同理被排除——sing-box 源码里写死
+//     Shadowsocks 2022 EIH support only available in AES ciphers
+// 带 users 会 FATAL invalid argument，只能退化成共享密码。
+//
+// 落地出站不受此限制（加密方式由对端决定）。
 func TestSupportedSSMethods(t *testing.T) {
 	allowed := []string{
 		"2022-blake3-aes-128-gcm",
 		"2022-blake3-aes-256-gcm",
-		"2022-blake3-chacha20-poly1305",
 	}
 	for _, m := range allowed {
 		if !isSupportedSSMethod(m) {
@@ -123,6 +128,8 @@ func TestSupportedSSMethods(t *testing.T) {
 		"",
 		"none",
 		"2022-blake3-aes-192-gcm", // 不存在的变体
+		// sing-box 的 EIH 仅支持 AES 系，这个只能共享密码，不作为入站
+		"2022-blake3-chacha20-poly1305",
 	}
 	for _, m := range rejected {
 		if isSupportedSSMethod(m) {

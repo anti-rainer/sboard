@@ -234,7 +234,6 @@
                   <select class="form-select" v-model="formData.ss_method">
                     <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm（16 字节密钥）</option>
                     <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm（32 字节，推荐）</option>
-                    <option value="2022-blake3-chacha20-poly1305">2022-blake3-chacha20-poly1305（32 字节，ARM 优化）</option>
                   </select>
                 </div>
 
