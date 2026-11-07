@@ -70,19 +70,24 @@
               <span class="server-host-addr">
                 <i class="bi bi-hdd"></i> {{ maskIP(server.host) || '等待 Agent 上报' }}
               </span>
+              <!-- 版本落后时的升级按钮：橙色圆圈 + 向上箭头，不占文字宽度。
+                   点击只给这一台下发 Agent 自更新指令。 -->
+              <button v-if="hashMismatch(server)" class="sb-upgrade-dot"
+                      :disabled="upgradingAgent === server.id"
+                      :title="mismatchTip(server)"
+                      @click.stop="upgradeAgent(server)">
+                <span v-if="upgradingAgent === server.id" class="spinner-border spinner-border-sm"></span>
+                <i v-else class="bi bi-arrow-up"></i>
+              </button>
               <span v-if="server.agent_version" class="sb-agent-ver"
-                    :title="`sha256: ${server.agent_hash || '-'}\n构建时间: ${server.agent_built_at || '-'}`">
+                    :title="`架构: ${server.agent_arch || '-'}\n构建标识: ${server.agent_build_id || '-'}\nsha256: ${server.agent_hash || '-'}\n构建时间: ${server.agent_built_at || '-'}`">
                 {{ server.agent_version }}
               </span>
             </div>
-            <!-- IPv6 行：右侧顶格显示版本不一致提示 -->
+            <!-- 第二行 IP（有 IPv6 时显示），不再承载版本信息 -->
             <div v-if="server.host_ipv6" class="server-host server-host-row">
               <span class="server-host-addr">
                 <i class="bi bi-hdd-stack"></i> {{ maskIP(server.host_ipv6) }}
-              </span>
-              <span v-if="hashMismatch(server)" class="badge bg-warning sb-ver-mismatch"
-                    :title="`本机 sha256: ${server.agent_hash}\n与多数机器不一致，可能未更新`">
-                版本不一致
               </span>
             </div>
           </div>
@@ -825,7 +830,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, inject, computed } from 'vue'
 import { Modal } from 'bootstrap'
-import { getServers, createServer, updateServer, deleteServer, getNodes, deployServer, deployAll as apiDeployAll, updateAllAgents as apiUpdateAllAgents, panelSelfUpdate, getPanelUpdateStatus, regenerateAgentToken, getServersStatus, reorderServers, getNodeConfigs, saveNodeConfig as saveNodeConfigApi, getServerOutbounds, createServerOutbound, updateServerOutbound, deleteServerOutbound, toggleServerOutbound, type Server, type Node, type ServerStatus, type NodeConfig, type ServerOutbound } from '@/api'
+import { getServers, createServer, updateServer, deleteServer, getNodes, deployServer, deployAll as apiDeployAll, updateAllAgents as apiUpdateAllAgents, updateServerAgent, panelSelfUpdate, getPanelUpdateStatus, regenerateAgentToken, getServersStatus, reorderServers, getNodeConfigs, saveNodeConfig as saveNodeConfigApi, getServerOutbounds, createServerOutbound, updateServerOutbound, deleteServerOutbound, toggleServerOutbound, type Server, type Node, type ServerStatus, type NodeConfig, type ServerOutbound } from '@/api'
 import { parseProxyLink, type ParsedProxy } from '../utils/proxyLink'
 import { MAIN_PROTOCOLS, getBranches, detectBranch, type ProtocolBranch } from '@/utils/protocolBranches'
 
@@ -1378,7 +1383,24 @@ function getDefaultFormData() {
 // 定时刷新状态
 let statusRefreshTimer: number | null = null
 
+/** 面板自身的构建批次标识，作为判断 agent 是否同版本的基准。
+ *
+ * 必须在 onMounted 之前声明：<script setup> 编译后是普通函数体，
+ * const 不提升，放在 onMounted 之后会被访问到暂时性死区，
+ * 异常被 catch 吞掉后值恒为空、版本不一致永远检测不到。
+ */
+const panelBuildId = ref('')
+
 onMounted(async () => {
+  // 先取面板自身的构建批次，作为判断 agent 版本一致性的基准
+  try {
+    const r = await fetch('/api/version', { cache: 'no-store' })
+    if (r.ok) {
+      const info = await r.json()
+      if (info?.build_id) panelBuildId.value = info.build_id
+    }
+  } catch { /* 取不到就不做一致性判断，避免误报 */ }
+
   await loadData()
   serverModal = new Modal(serverModalEl.value!)
   deployModal = new Modal(deployModalEl.value!)
@@ -1641,6 +1663,23 @@ async function deployFolder(server: ServerWithState) {
   }
 }
 
+/** 正在升级 Agent 的服务器 ID（0 表示没有） */
+const upgradingAgent = ref(0)
+
+/** 单台服务器的 Agent 升级 */
+async function upgradeAgent(server: ServerWithState) {
+  upgradingAgent.value = server.id
+  try {
+    const res = await updateServerAgent(server.id)
+    showToast('success', '已下发', res.data.data?.message || '更新指令已发送')
+  } catch (error: any) {
+    showToast('error', '失败', error.response?.data?.error || '下发更新指令失败')
+  } finally {
+    // Agent 下载替换需要时间，留一小段再解锁按钮（避免重复点击）
+    window.setTimeout(() => { upgradingAgent.value = 0 }, 8000)
+  }
+}
+
 /** 面板自我更新中 */
 const updatingPanel = ref(false)
 
@@ -1820,25 +1859,25 @@ async function copyToClipboard(text: string) {
   }
 }
 
-/** 多数机器共用的 agent hash：用于识别「落单」的机器 */
-const majorityHash = computed(() => {
-  const counts = new Map<string, number>()
-  for (const s of servers.value) {
-    if (!s.agent_hash || !s.agent_online) continue
-    counts.set(s.agent_hash, (counts.get(s.agent_hash) || 0) + 1)
-  }
-  let best = ''
-  let bestN = 0
-  for (const [h, n] of counts) {
-    if (n > bestN) { best = h; bestN = n }
-  }
-  return best
-})
+/** 面板自身的构建批次标识，作为判断 agent 是否同版本的基准 */
+/** 该机器的 agent 是否与面板不在同一构建批次。
+ *
+ * 用构建批次而不是二进制 hash：同一批次下 amd64 与 arm64 的二进制
+ * hash 必然不同，按 hash 比较会把「正常架构差异」误报成版本不一致
+ * （实例：x86 主机都是 4a7a8218…，ARM 路由是 a86819cc…，均属最新）。
+ */
+/** 不一致标签的悬浮说明 */
+function mismatchTip(server: ServerWithState): string {
+  return `agent 构建标识: ${server.agent_build_id || '未上报'}\n`
+    + `面板构建标识: ${panelBuildId || '未知'}\n`
+    + '两者不同说明该机器未更新到当前发布'
+}
 
-/** 该机器的 hash 是否与多数派不同（说明它可能没更新到位） */
 function hashMismatch(server: ServerWithState): boolean {
-  if (!server.agent_hash || !majorityHash.value) return false
-  return server.agent_hash !== majorityHash.value
+  const agentId = server.agent_build_id
+  // 面板还没拿到自己的 build_id，或 agent 尚未上报 → 不做判断，避免误报
+  if (!panelBuildId.value || !agentId) return false
+  return agentId !== panelBuildId.value
 }
 
 async function copyDeployCommand() {

@@ -251,8 +251,12 @@ export interface Server {
   agent_token: string
   agent_id: string
   agent_version: string
-  /** agent 二进制 sha256，用于确认各机器实际运行的版本 */
+  /** agent 二进制 sha256（同架构内可比对，跨架构必然不同） */
   agent_hash?: string
+  /** agent 的 CPU 架构（amd64/arm64/armv7/386） */
+  agent_arch?: string
+  /** agent 所属构建批次，与面板 build_id 相同即视为同版本 */
+  agent_build_id?: string
   /** agent 二进制文件修改时间（RFC3339） */
   agent_built_at?: string
   agent_online: boolean
@@ -456,6 +460,11 @@ export const panelSelfUpdate = () => {
 // 面板更新状态
 export const getPanelUpdateStatus = () => {
 	return api.get<ApiResponse<{ running: boolean; message: string; success: boolean; finished: boolean }>>('/servers/panel-update/status')
+}
+
+// 单台服务器 Agent 自更新
+export const updateServerAgent = (id: number) => {
+	return api.post<ApiResponse<{ message: string; server: string }>>(`/servers/${id}/agent-update`)
 }
 
 // Agent 更新（向所有存活 Agent 发送自我更新指令）

@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -104,7 +105,20 @@ func selfBinaryInfo() map[string]interface{} {
 		"agent_path":     selfHashPath,
 		"agent_built_at": selfHashBuiltAt,
 		"agent_size":     selfHashSize,
+		// 架构按发布包命名归一化：Go 在 armv7 设备上报告 "arm"，
+		// 而发布包叫 armv7。前端用它分组比较 hash。
+		"agent_arch": normalizeArch(runtime.GOARCH),
+		// build_id 是本次构建的批次标识，跨架构一致，用于版本一致性判断
+		"build_id": BuildID,
 	}
 	selfHashMu.Unlock()
 	return info
+}
+
+// normalizeArch 把 runtime.GOARCH 归一化成发布包使用的架构名。
+func normalizeArch(goarch string) string {
+	if goarch == "arm" {
+		return "armv7"
+	}
+	return goarch
 }

@@ -1573,3 +1573,56 @@ pre code {
   .modal-footer { flex-wrap: nowrap; }
   .modal-footer .btn { flex: 1 1 auto; }
 }
+
+/* ===== 服务器卡片：Agent 升级提示按钮 =====
+ * 版本落后的机器在 IP 行右侧显示一枚橙色圆圈 + 向上箭头。
+ * 纯图标不占文字宽度，也不像黄色「版本不一致」标签那样抢视觉；
+ * 悬浮提示里给出两侧构建标识，方便判断到底是不是没更新到。
+ */
+.sb-upgrade-dot {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f97316;            /* orange-500 */
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color .15s ease, transform .15s ease;
+}
+
+.sb-upgrade-dot:hover:not(:disabled) {
+  background: #ea580c;            /* orange-600 */
+  transform: translateY(-1px);
+}
+
+.sb-upgrade-dot:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sb-upgrade-dot:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+/* 深色模式下橙色本身对比度足够，只调亮度避免刺眼 */
+[data-theme="dark"] .sb-upgrade-dot {
+  background: #fb923c;            /* orange-400 */
+  color: #1a1a1a;
+}
+
+[data-theme="dark"] .sb-upgrade-dot:hover:not(:disabled) {
+  background: #fdba74;            /* orange-300 */
+}
+
+/* 按钮与版本号之间留一点间隙；版本号仍贴右顶格 */
+.sb-upgrade-dot + .sb-agent-ver {
+  margin-left: 6px;
+}

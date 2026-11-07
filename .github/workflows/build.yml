@@ -123,7 +123,15 @@ jobs:
           if [ -z "$VERSION" ]; then
             VERSION="dev"
           fi
-          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          # 构建标识：同一批次的所有架构共用同一个值，用于面板与 agent
+          # 相互识别「是否来自同一次发布」。不能依赖二进制 hash ——
+          # 不同架构（amd64/arm64/armv7）编译产物天然不同，无法直接比对。
+          # 取 release 事件时间戳 + commit，保证同批次内所有 job 算出同一值。
+          BUILD_ID=$(printf '%s|%s' "${GITHUB_SHA}" "${{ github.event.inputs.version }}" | sha256sum | cut -c1-32)
+          BUILD_ID=$(printf '%s' "${BUILD_ID}" | base64 | tr -d '\n')
+          echo "BUILD_ID=${BUILD_ID}"
+
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildID=${BUILD_ID}"
           
           if [ "$GOOS" = "windows" ]; then
             go build -ldflags "${LDFLAGS}" -o sboard.exe ./cmd/sboard
@@ -220,7 +228,13 @@ jobs:
           if [ -z "$VERSION" ]; then
             VERSION="dev"
           fi
-          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          # 同 build-sboard：同一算法算出同一个 BUILD_ID，
+          # 面板与 agent 二进制因此带上相同的批次标识。
+          BUILD_ID=$(printf '%s|%s' "${GITHUB_SHA}" "${{ github.event.inputs.version }}" | sha256sum | cut -c1-32)
+          BUILD_ID=$(printf '%s' "${BUILD_ID}" | base64 | tr -d '\n')
+          echo "BUILD_ID=${BUILD_ID}"
+
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildID=${BUILD_ID}"
           
           if [ "$GOOS" = "windows" ]; then
             go build -ldflags "${LDFLAGS}" -o sboard-agent.exe ./cmd/agent

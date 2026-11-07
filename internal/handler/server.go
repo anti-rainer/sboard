@@ -112,7 +112,8 @@ func (s *Server) setupRoutes() {
 				servers.POST("", s.handleCreateServer)
 				servers.POST("/reorder", s.handleReorderServers)     // 重新排序
 				servers.POST("/deploy-all", s.handleDeployAll)       // 全部部署
-				servers.POST("/update-agents", s.handleUpdateAgents) // Agent 更新
+				servers.POST("/update-agents", s.handleUpdateAgents) // Agent 更新（全体）
+			servers.POST("/:id/agent-update", s.handleUpdateServerAgent) // 单台 Agent 更新
 			// 面板自身更新
 			servers.POST("/panel-update", s.handlePanelSelfUpdate)
 			servers.GET("/panel-update/status", s.handlePanelUpdateStatus)

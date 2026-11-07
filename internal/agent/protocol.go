@@ -65,6 +65,13 @@ type HeartbeatData struct {
 	AgentPath    string `json:"agent_path,omitempty"`
 	AgentBuiltAt string `json:"agent_built_at,omitempty"`
 	AgentSize    int64  `json:"agent_size,omitempty"`
+	// AgentArch agent 二进制所属架构（amd64/arm64/386/armv7）。
+	// 跨架构的二进制必然 hash 不同，前端只在同架构机器之间比较，
+	// 否则 x86 主机与 ARM 路由会把「正常差异」误报成版本不一致。
+	AgentArch string `json:"agent_arch,omitempty"`
+	// BuildID agent 所属构建批次，与面板同批次时值相同。
+	// 跨架构必须用它比对：二进制 hash 因架构不同天然不同。
+	BuildID string `json:"build_id,omitempty"`
 	LocalIP        string  `json:"local_ip"`         // 本机 IPv4
 	LocalIPv6      string  `json:"local_ip_v6"`      // 本机 IPv6
 }

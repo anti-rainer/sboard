@@ -42,6 +42,11 @@ var embeddedConfigs embed.FS
 
 var (
 	Version        = "dev" // 构建时通过 -ldflags "-X main.Version=..." 注入
+	// BuildID 构建批次标识（base64），由 CI 在构建时注入。
+	// 同一批次的面板与 agent 带同一个值，用于相互识别。
+	// 用批次标识而不是二进制 hash：不同架构（amd64/arm64/armv7）
+	// 的编译产物 hash 天然不同，无法跨架构比对。
+	BuildID = "dev"
 	serviceManager = NewServiceManager()
 
 	// directClient 绕过系统代理（HTTP_PROXY）用于获取本机公网 IP

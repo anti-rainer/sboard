@@ -306,6 +306,12 @@ func (h *AgentHub) flushServerMetrics(serverID uint, data *agent.HeartbeatData) 
 	if data.AgentBuiltAt != "" {
 		updates["agent_built_at"] = data.AgentBuiltAt
 	}
+	if data.AgentArch != "" {
+		updates["agent_arch"] = data.AgentArch
+	}
+	if data.BuildID != "" {
+		updates["agent_build_id"] = data.BuildID
+	}
 	database.GetDB().Model(&database.Server{}).Where("id = ?", serverID).Updates(updates)
 
 	// 累加月度流量（使用精确差值）
@@ -1063,6 +1069,51 @@ func isDevDomainName(domain string) bool {
 }
 
 // handleUpdateAgents 更新所有 Agent（向所有存活 Agent 发送自我更新指令）
+// handleUpdateServerAgent 给单台服务器下发 Agent 自更新指令。
+//
+// 与 handleUpdateAgents（全体广播）共用同一份 updateData：
+// 仓库地址与加速域名由面板下发，改配置不用重编 agent。
+func (s *Server) handleUpdateServerAgent(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		errorJSON(c, http.StatusBadRequest, "无效的服务器 ID")
+		return
+	}
+
+	var server database.Server
+	if err := database.GetDB().First(&server, id).Error; err != nil {
+		errorJSON(c, http.StatusNotFound, "服务器不存在")
+		return
+	}
+
+	// 在锁内只取连接引用，网络写在锁外做
+	agentHub.mu.RLock()
+	conn, ok := agentHub.serverMap[server.ID]
+	agentHub.mu.RUnlock()
+
+	if !ok || conn == nil || !conn.IsAlive() {
+		errorJSON(c, http.StatusBadRequest, "该服务器的 Agent 不在线，无法下发更新指令")
+		return
+	}
+
+	rawData, _ := json.Marshal(buildSelfUpdateData())
+	msg := &agent.Message{
+		ID:        generateMsgID(),
+		Type:      agent.MsgTypeSelfUpdate,
+		Timestamp: time.Now().Unix(),
+		Data:      rawData,
+	}
+	if err := conn.Send(msg); err != nil {
+		errorJSON(c, http.StatusInternalServerError, "发送更新指令失败: "+err.Error())
+		return
+	}
+
+	successJSON(c, gin.H{
+		"message": "Agent 更新指令已发送",
+		"server":  server.Name,
+	})
+}
+
 func (s *Server) handleUpdateAgents(c *gin.Context) {
 	// 获取所有启用的服务器
 	var servers []database.Server

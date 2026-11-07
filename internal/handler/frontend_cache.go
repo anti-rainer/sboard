@@ -110,10 +110,20 @@ func (s *Server) serveIndex(webFS fs.FS) gin.HandlerFunc {
 // Version 面板版本号，由 main 通过 SetVersion 注入（-ldflags 注入到 cmd/sboard）。
 var Version = "dev"
 
+// BuildID 面板构建批次标识，与同批次 agent 的值相同。
+var BuildID = "dev"
+
 // SetVersion 设置面板版本号。
 func SetVersion(v string) {
 	if v != "" {
 		Version = v
+	}
+}
+
+// SetBuildID 设置构建批次标识。
+func SetBuildID(id string) {
+	if id != "" {
+		BuildID = id
 	}
 }
 
@@ -126,6 +136,8 @@ func (s *Server) handleVersionInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"build_at": s.buildTime.UTC().Format(time.RFC3339Nano),
 		"version":  Version,
+		// build_id 供前端与 agent 上报值比对，判断是否同一次发布
+		"build_id": BuildID,
 	})
 }
 

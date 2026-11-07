@@ -23,6 +23,8 @@ import (
 var (
 	Version    = "3.0.0"
 	CommitHash = "dev"
+	// BuildID 构建批次标识（base64），CI 构建时注入，与 agent 同一批次的值相同。
+	BuildID = "dev"
 )
 
 //go:embed all:web
@@ -138,6 +140,7 @@ func main() {
 
 	// 把版本号透传给 handler，供 /api/version 返回给前端做更新检测
 	handler.SetVersion(Version)
+	handler.SetBuildID(BuildID)
 
 	// 创建 HTTP 服务器
 	server := handler.NewServer(cfg, frontendFS)

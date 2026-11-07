@@ -499,6 +499,11 @@ type Server struct {
 	AgentHash string `gorm:"size:64" json:"agent_hash"`
 	// AgentBuiltAt agent 二进制的文件修改时间（RFC3339），用于判断更新是否落地。
 	AgentBuiltAt string `gorm:"size:32" json:"agent_built_at"`
+	// AgentArch agent 二进制架构（amd64/arm64/armv7/386）。
+	// 跨架构二进制必然 hash 不同，版本一致性必须按架构分组判断。
+	AgentArch string `gorm:"size:16" json:"agent_arch"`
+	// AgentBuildID agent 上报的构建批次标识，与面板 BuildID 相同即视为同版本。
+	AgentBuildID string `gorm:"size:64" json:"agent_build_id"`
 	LastHeartbeat *time.Time `json:"last_heartbeat"`                    // 最后心跳时间
 
 	// 服务器状态 (Agent 上报)
