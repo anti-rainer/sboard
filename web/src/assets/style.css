@@ -730,7 +730,11 @@ hr {
 
 /* 分段胶囊：协议分支选择器。成组呈现，选中项实心 */
 .branch-pills {
-  display: inline-flex;
+  /* 用 flex 而不是 inline-flex：inline-flex 会按内容宽度撑开，
+     在窄屏上直接顶破弹框（实测 607px vs 视口 390px）。 */
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 2px;
   padding: 3px;
@@ -996,19 +1000,133 @@ hr {
   max-height: calc(100vh - 1.5rem);
 }
 
-/* 内容比视口高时，让 body 内部滚动而不是整页滚动 */
-.modal-dialog > .modal-content > .modal-body {
+/* ============================================================
+   表单分组
+   ------------------------------------------------------------
+   长表单不再靠 mt-3/mb-2 硬凑间距，而是切成若干 section：
+   每个 section 有小标题、统一内边距，字段之间用 .row.g-3 统一间隔。
+   这样纵向高度可控、视觉上也有明确层次。
+   ============================================================ */
+.sb-form-section {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius);
+  background: var(--sb-surface-2);
+  margin-bottom: 0.6rem;
+}
+
+.sb-form-section:last-child { margin-bottom: 0; }
+
+.sb-form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--sb-text-muted);
+  margin-bottom: 0.7rem;
+}
+
+.sb-form-section-title i { color: var(--sb-accent); font-size: 0.95rem; }
+
+.sb-form-section-note {
+  font-weight: 400;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  margin-left: auto;
+}
+
+/* 必填星号 */
+.sb-req { color: var(--sb-danger, #dc3545); }
+
+/* 说明文字：统一小号弱化，替代原来散落的 small.text-muted */
+.sb-hint {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--sb-text-muted);
+  margin-top: 0.3rem;
+}
+
+.sb-hint i { margin-right: 0.2rem; }
+
+/* 一行内并排多个开关（例如 TLS / Reality） */
+.sb-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.5rem;
+}
+
+/* section 内的 label 与输入框间距更紧凑，避免整体过高 */
+.sb-form-section .form-label { margin-bottom: 0.3rem; }
+.sb-form-section .row { --bs-gutter-x: 0.65rem; --bs-gutter-y: 0.55rem; }
+
+/* 弹框内滚动条收细，避免在窄屏上过于突兀 */
+.modal-body { scrollbar-width: thin; }
+.modal-body::-webkit-scrollbar { width: 6px; height: 6px; }
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--sb-border);
+  border-radius: 3px;
+}
+.modal-body::-webkit-scrollbar-thumb:hover { background: var(--sb-text-muted); }
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+
+/* 弹框内 textarea 不要随内容无限长高 */
+.modal-body textarea.form-control { max-height: 8rem; resize: vertical; }
+
+/* ============================================================
+   弹框尺寸与滚动
+   ------------------------------------------------------------
+   结构上必须同时对付两种 DOM：
+     A. content > (header|body|footer)          —— 直接用 Bootstrap
+     B. content > form > (body|footer)          —— 表单提交型弹框
+   B 是我们实际大量使用的写法（Nodes/Servers/Users/ExternalNodes），
+   之前所有选择器都写成 content > body，对 B 完全不命中，
+   于是 body 的 overflow-y:auto 从未生效，长表单直接把 footer
+   顶出视口（实测 form.bottom 821 vs 视口 808）。
+
+   这里用 :is() 同时覆盖两种结构，并给中间层 form 也设成 flex
+   容器，否则 body 无法真正收缩，max-height 只会在外层裁剪。
+   ============================================================ */
+
+/* 1) 让 form 也成为受约束的 flex 容器（结构 B 的关键） */
+.modal-content > form {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 2) body 允许收缩并内部滚动；header/footer 固定不被压缩。
+      两种结构都覆盖：content > body（A）与 content > form > body（B）。 */
+.modal-dialog > .modal-content > .modal-body,
+.modal-dialog > .modal-content > form > .modal-body {
   overflow-y: auto;
   overscroll-behavior: contain;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modal-dialog > .modal-content > .modal-header,
-.modal-dialog > .modal-content > .modal-footer {
+.modal-dialog > .modal-content > .modal-footer,
+.modal-dialog > .modal-content > form > .modal-footer {
   flex: 0 0 auto;
 }
 
+/* 3) content 限高，内容超长时由内部滚动消化 */
+.modal-dialog > .modal-content {
+  max-height: calc(100vh - 1.5rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .modal-footer {
-  padding: 0.85rem 1.25rem;
+  /* 底部安全区：iPhone 带手势条时避免按钮被小白条压住 */
+  padding: 0.85rem 1.25rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--sb-border);
   background: var(--sb-surface-2);
   border-radius: 0 0 var(--sb-radius-lg) var(--sb-radius-lg);
@@ -1314,4 +1432,74 @@ pre code {
   .modal-dialog { margin: 0.6rem; }
 
   h4 { font-size: 1.2rem; }
+
+  /* ---------- 移动端弹框表单 ---------- */
+
+  /* 开关并排在小屏容易挤压，改为上下堆叠、加大触控间距 */
+  .sb-switch-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* 分组再收紧一档，小屏纵向空间有限 */
+  .sb-form-section { padding: 0.65rem 0.7rem; margin-bottom: 0.5rem; }
+  .sb-form-section-title { margin-bottom: 0.55rem; font-size: 0.78rem; }
+  .sb-form-section .row { --bs-gutter-y: 0.5rem; }
+
+  /* 协议分支：小屏上胶囊文字长（HTTPUpgrade-TLS），改为单行横向滚动，
+     避免折成两行把容器撑高、还留下大块空白。
+     min-width:0 是关键：flex/grid 子项默认 min-width:auto，
+     否则容器会被内容撑到 607px 直接撑破弹框。 */
+  .branch-pills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-width: 0;
+    max-width: 100%;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    /* 右侧渐隐：提示「还有内容可横向滑动」，否则末项被硬裁切
+       看起来像文字被截断 */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent);
+  }
+  .branch-pills::-webkit-scrollbar { display: none; }
+  .branch-pill { flex: 0 0 auto; white-space: nowrap; }
+  /* 内容没溢出时不要渐隐（否则右边缘无谓发虚） */
+  .branch-pills:not(.is-scrollable) {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  /* 触控热区：胶囊与关闭按钮在移动端要够大 */
+  .branch-pill { min-height: 32px; padding-left: 0.6rem; padding-right: 0.6rem; }
+  .modal .btn-close { padding: 0.6rem; }
+
+  /* 输入框在移动端用 16px 字号，否则 iOS 聚焦时会自动放大页面 */
+  .modal-body .form-control,
+  .modal-body .form-select {
+    font-size: 16px;
+  }
+
+  /* 移动端弹框切近全屏：纵向空间利用率更高，软键盘弹出时也不容易被遮挡 */
+  .modal-dialog {
+    margin: 0.4rem;
+    max-width: calc(100vw - 0.8rem);
+  }
+  .modal-dialog > .modal-content {
+    max-height: calc(100vh - 0.8rem);
+    max-height: calc(100dvh - 0.8rem);
+  }
+  .modal-header { padding: 0.7rem 0.9rem; }
+  .modal-body { padding: 0.75rem 0.7rem; }
+  .modal-footer { padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom, 0px)); }
+
+  /* 移动端触屏无需可见滚动条 */
+  .modal-body { scrollbar-width: none; }
+  .modal-body::-webkit-scrollbar { display: none; }
+
+  /* 底部按钮占满、更好点 */
+  .modal-footer { flex-wrap: nowrap; }
+  .modal-footer .btn { flex: 1 1 auto; }
 }

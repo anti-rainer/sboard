@@ -73,284 +73,337 @@
           </div>
           <form @submit.prevent="saveNode">
             <div class="modal-body">
-              <div class="row">
-                <div class="col-md-6 mb-3">
-                  <label>标签 *</label>
-                  <input type="text" class="form-control" v-model="formData.tag" required>
+              <!-- ═══ 基础信息 ═══ -->
+              <div class="sb-form-section">
+                <div class="sb-form-section-title">
+                  <i class="bi bi-hdd-network"></i> 基础信息
                 </div>
-                <div class="col-md-6 mb-3">
-                  <label>协议</label>
-                  <select class="form-select" v-model="formData.protocol" @change="onProtocolChange">
-                    <option v-for="p in MAIN_PROTOCOLS" :key="p.id" :value="p.id">{{ p.label }}</option>
-                  </select>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <label>监听地址</label>
-                  <input type="text" class="form-control" v-model="formData.listen">
-                </div>
-                <div class="col-md-6 mb-3">
-                  <label>端口 *</label>
-                  <input type="number" class="form-control" v-model.number="formData.port" min="1" max="65535" required>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label class="form-label">标签 <span class="sb-req">*</span></label>
+                    <input type="text" class="form-control" v-model="formData.tag" required>
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label">协议</label>
+                    <select class="form-select" v-model="formData.protocol" @change="onProtocolChange">
+                      <option v-for="p in MAIN_PROTOCOLS" :key="p.id" :value="p.id">{{ p.label }}</option>
+                    </select>
+                  </div>
+                  <div class="col-sm-8" v-if="branches.length">
+                    <label class="form-label">协议分支</label>
+                    <div class="branch-pills">
+                      <button type="button" v-for="b in branches" :key="b.id"
+                              class="branch-pill"
+                              :class="{ active: activeBranch === b.id }"
+                              :title="b.hint || b.label"
+                              @click="applyBranch(b)">
+                        {{ b.label }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-sm-4" v-if="branches.length">
+                    <label class="form-label">端口 <span class="sb-req">*</span></label>
+                    <input type="number" class="form-control" v-model.number="formData.port" min="1" max="65535" required>
+                  </div>
+                  <div class="col-12" v-if="!branches.length">
+                    <div class="row g-3">
+                      <div class="col-sm-6">
+                        <label class="form-label">端口 <span class="sb-req">*</span></label>
+                        <input type="number" class="form-control" v-model.number="formData.port" min="1" max="65535" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label">监听地址</label>
+                        <input type="text" class="form-control" v-model="formData.listen"
+                               placeholder=":: （留空默认监听全部地址）">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-12" v-if="branches.length">
+                    <label class="form-label">监听地址</label>
+                    <input type="text" class="form-control" v-model="formData.listen"
+                           placeholder=":: （留空默认监听全部地址）">
+                  </div>
+                  <div class="col-12" v-if="activeBranchHint">
+                    <div class="sb-hint">
+                      <i class="bi bi-info-circle"></i> {{ activeBranchHint }}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <!-- 协议分支：胶囊选择 -->
-              <div class="mb-3" v-if="branches.length">
-                <label class="form-label">协议分支 <span class="text-muted small">（先选主协议，再选具体分支）</span></label>
-                <div class="branch-pills">
-                  <button type="button" v-for="b in branches" :key="b.id"
-                          class="branch-pill"
-                          :class="{ active: activeBranch === b.id }"
-                          :title="b.hint || b.label"
-                          @click="applyBranch(b)">
-                    {{ b.label }}
-                  </button>
+              <!-- ═══ 传输安全 ═══ -->
+              <div class="sb-form-section"
+                   v-if="!['shadowsocks','socks'].includes(formData.protocol)">
+                <div class="sb-form-section-title">
+                  <i class="bi bi-shield-lock"></i> 传输安全
+                  <span class="sb-form-section-note">
+                    {{ formData.protocol === 'naive' ? 'naive 强制 TLS' :
+                       (['hysteria2','tuic'].includes(formData.protocol) ? 'QUIC 系强制 TLS' : '') }}
+                  </span>
                 </div>
-                <small class="text-muted d-block mt-1" v-if="activeBranchHint">
-                  <i class="bi bi-info-circle"></i> {{ activeBranchHint }}
-                </small>
-              </div>
 
-              <!-- TLS 配置 -->
-              <div class="form-check form-switch mb-2" v-if="!['shadowsocks','naive','socks','tuic'].includes(formData.protocol)">
-                <input class="form-check-input" type="checkbox" role="switch" v-model="formData.tls_enabled" id="tlsEnabled">
-                <label class="form-check-label" for="tlsEnabled">启用 TLS</label>
-              </div>
-              
-              <div v-if="(formData.tls_enabled || formData.protocol === 'naive') && formData.protocol !== 'shadowsocks'" id="tlsFields">
-                <div class="mb-2">
-                  <label>Server Name</label>
-                  <input type="text" class="form-control" v-model="formData.server_name">
+                <div class="sb-switch-row" v-if="!['naive','hysteria2','tuic'].includes(formData.protocol)">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           v-model="formData.tls_enabled" id="tlsEnabled">
+                    <label class="form-check-label" for="tlsEnabled">启用 TLS</label>
+                  </div>
+                  <div class="form-check form-switch mb-0"
+                       v-if="formData.protocol !== 'naive' && (formData.tls_enabled || formData.reality_enabled)">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           v-model="formData.reality_enabled" id="realityEnabled">
+                    <label class="form-check-label" for="realityEnabled">启用 Reality</label>
+                  </div>
                 </div>
-                
-                <!-- 证书字段（Reality 启用时隐藏） -->
-                <div id="certFields" v-if="!formData.reality_enabled">
-                  <div class="row">
-                    <div class="col-md-6 mb-2">
-                      <label>证书路径</label>
+
+                <div v-if="(formData.tls_enabled || ['naive','hysteria2','tuic'].includes(formData.protocol))"
+                     id="tlsFields" class="row g-3 mt-1">
+                  <div class="col-sm-6">
+                    <label class="form-label">Server Name</label>
+                    <input type="text" class="form-control" v-model="formData.server_name">
+                  </div>
+
+                  <!-- 证书字段（Reality 启用时隐藏） -->
+                  <template v-if="!formData.reality_enabled">
+                    <div class="col-sm-3">
+                      <label class="form-label">证书路径</label>
                       <input type="text" class="form-control" v-model="formData.cert_path">
                     </div>
-                    <div class="col-md-6 mb-2">
-                      <label>密钥路径</label>
+                    <div class="col-sm-3">
+                      <label class="form-label">密钥路径</label>
                       <input type="text" class="form-control" v-model="formData.key_path">
                     </div>
-                  </div>
-                </div>
-                
-                <!-- Reality 配置 (Naive 不支持 Reality) -->
-                <div class="form-check mb-2" v-if="formData.protocol !== 'naive'">
-                  <input class="form-check-input" type="checkbox" v-model="formData.reality_enabled" id="realityEnabled">
-                  <label class="form-check-label" for="realityEnabled">启用 Reality</label>
-                </div>
-                <div v-if="formData.reality_enabled && formData.protocol !== 'naive'" id="realityFields">
-                  <div class="mb-2">
-                    <label>Reality Server (握手服务器)</label>
-                    <input type="text" class="form-control" v-model="formData.reality_server" placeholder="www.apple.com">
-                    <small class="text-muted">用于伪装的真实网站，如: www.apple.com</small>
-                  </div>
-                  <div class="mb-2">
-                    <label>Public Key 
-                      <button type="button" class="btn btn-sm btn-outline-primary" @click="generateRealityKeys" :disabled="generatingRealityKeys">
-                        <span v-if="generatingRealityKeys" class="spinner-border spinner-border-sm me-1"></span>
-                        <i v-else class="bi bi-key"></i> {{ generatingRealityKeys ? '生成中...' : '生成密钥对' }}
-                      </button>
-                    </label>
-                    <input type="text" class="form-control" v-model.trim="formData.reality_pubkey" placeholder="可点击生成，也可手动填写" autocomplete="off">
-                  </div>
-                  <div class="mb-2">
-                    <label>Private Key (部署时使用)</label>
-                    <input type="text" class="form-control" v-model.trim="formData.reality_privkey" placeholder="可点击生成，也可手动填写" autocomplete="off">
-                    <small class="text-muted">此密钥将在部署时写入服务器配置，可手动填写</small>
-                  </div>
-                  <div class="mb-2">
-                    <label>Short ID</label>
-                    <input type="text" class="form-control" v-model.trim="formData.reality_short_id" placeholder="留空则保存时自动生成" maxlength="16" autocomplete="off">
-                    <small class="text-muted">可手动填写十六进制标识，留空则保存时自动生成</small>
-                  </div>
+                  </template>
+
+                  <!-- Reality 字段 -->
+                  <template v-if="formData.reality_enabled && formData.protocol !== 'naive'">
+                    <div class="col-12">
+                      <label class="form-label">Reality 握手服务器</label>
+                      <input type="text" class="form-control" v-model="formData.reality_server"
+                             placeholder="www.apple.com">
+                      <div class="sb-hint">用于伪装的真实网站，格式 host:port 或 host（默认 443）</div>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label d-flex align-items-center justify-content-between">
+                        <span>密钥对</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                @click="generateRealityKeys" :disabled="generatingRealityKeys">
+                          <span v-if="generatingRealityKeys" class="spinner-border spinner-border-sm me-1"></span>
+                          <i v-else class="bi bi-key"></i>
+                          {{ generatingRealityKeys ? '生成中...' : '生成密钥对' }}
+                        </button>
+                      </label>
+                      <div class="row g-2">
+                        <div class="col-12 col-sm-5">
+                          <input type="text" class="form-control" v-model.trim="formData.reality_pubkey"
+                                 placeholder="Public Key" autocomplete="off">
+                        </div>
+                        <div class="col-12 col-sm-5">
+                          <input type="text" class="form-control" v-model.trim="formData.reality_privkey"
+                                 placeholder="Private Key（部署时使用）" autocomplete="off">
+                        </div>
+                        <div class="col-12 col-sm-2">
+                          <input type="text" class="form-control" v-model.trim="formData.reality_short_id"
+                                 placeholder="Short ID" maxlength="16" autocomplete="off">
+                        </div>
+                      </div>
+                      <div class="sb-hint">留空时保存自动生成 Short ID；私钥将在部署时写入服务器配置</div>
+                    </div>
+                  </template>
                 </div>
               </div>
 
-              <!-- 传输层配置 -->
-              <div class="form-check form-switch mb-2 mt-3" v-if="!['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)">
-                <input class="form-check-input" type="checkbox" role="switch" v-model="formData.transport_enabled" id="transportEnabled">
-                <label class="form-check-label" for="transportEnabled">启用传输层</label>
-              </div>
-              <div v-if="formData.transport_enabled && !['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)" id="transportFields">
-                <div class="mb-2">
-                  <label>传输层类型</label>
-                  <select class="form-select" v-model="formData.transport_type">
-                    <option value="ws">WebSocket (ws)</option>
-                    <option value="grpc">gRPC</option>
-                    <option value="h2">HTTP/2 (h2)</option>
-                    <option value="httpupgrade">HTTPUpgrade</option>
-                    <option value="quic">QUIC</option>
-                  </select>
+              <!-- ═══ 传输层 ═══ -->
+              <div class="sb-form-section"
+                   v-if="!['shadowsocks','hysteria2','naive','socks','tuic'].includes(formData.protocol)">
+                <div class="sb-form-section-title">
+                  <i class="bi bi-diagram-3"></i> 传输层
                 </div>
-                <!-- WebSocket / HTTPUpgrade -->
-                <div v-if="formData.transport_type === 'ws' || formData.transport_type === 'httpupgrade'" id="wsFields">
-                  <div class="mb-2">
-                    <label>Path</label>
-                    <input type="text" class="form-control" v-model="formData.ws_path" placeholder="/path">
-                  </div>
-                  <div class="mb-2">
-                    <label>Host (伪装域名)</label>
-                    <input type="text" class="form-control" v-model="formData.transport_host" placeholder="cdn.example.com">
+                <div class="sb-switch-row" v-if="formData.transport_enabled">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           v-model="formData.transport_enabled" id="transportEnabled">
+                    <label class="form-check-label" for="transportEnabled">启用传输层</label>
                   </div>
                 </div>
-                <!-- gRPC -->
-                <div v-if="formData.transport_type === 'grpc'" id="grpcFields">
-                  <div class="mb-2">
-                    <label>gRPC Service Name</label>
-                    <input type="text" class="form-control" v-model="formData.grpc_service">
+                <div class="sb-switch-row" v-else>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           v-model="formData.transport_enabled" id="transportEnabled">
+                    <label class="form-check-label" for="transportEnabled">启用传输层</label>
                   </div>
+                </div>
+
+                <div v-if="formData.transport_enabled" id="transportFields" class="row g-3 mt-1">
+                  <div class="col-sm-5">
+                    <label class="form-label">传输层类型</label>
+                    <select class="form-select" v-model="formData.transport_type">
+                      <option value="ws">WebSocket (ws)</option>
+                      <option value="grpc">gRPC</option>
+                      <option value="h2">HTTP/2 (h2)</option>
+                      <option value="httpupgrade">HTTPUpgrade</option>
+                      <option value="quic">QUIC</option>
+                    </select>
+                  </div>
+                  <template v-if="formData.transport_type === 'ws' || formData.transport_type === 'httpupgrade'">
+                    <div class="col-sm-3">
+                      <label class="form-label">Path</label>
+                      <input type="text" class="form-control" v-model="formData.ws_path" placeholder="/path">
+                    </div>
+                    <div class="col-sm-4">
+                      <label class="form-label">Host（伪装域名）</label>
+                      <input type="text" class="form-control" v-model="formData.transport_host"
+                             placeholder="cdn.example.com">
+                    </div>
+                  </template>
+                  <template v-if="formData.transport_type === 'grpc'">
+                    <div class="col-sm-7">
+                      <label class="form-label">gRPC Service Name</label>
+                      <input type="text" class="form-control" v-model="formData.grpc_service">
+                    </div>
+                  </template>
                 </div>
               </div>
 
               <!-- Flow 配置 (仅VLESS) -->
-              <div v-if="formData.protocol === 'vless' && formData.tls_enabled && !formData.transport_enabled" id="flowFields" class="mt-3">
-                <div class="mb-2">
-                  <label>Flow (VLESS XTLS)</label>
-                  <select class="form-select" v-model="formData.flow">
-                    <option value="">无</option>
-                    <option value="xtls-rprx-vision">xtls-rprx-vision (推荐)</option>
-                    <option value="xtls-rprx-direct">xtls-rprx-direct (已弃用)</option>
-                  </select>
-                  <small class="text-muted">仅在 TLS 且不使用传输层时可用</small>
+              <div v-if="formData.protocol === 'vless' && !formData.transport_enabled" id="flowFields"
+                   class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-signpost-split"></i> XTLS</div>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label class="form-label">Flow</label>
+                    <select class="form-select" v-model="formData.flow">
+                      <option value="">无</option>
+                      <option value="xtls-rprx-vision">xtls-rprx-vision（推荐）</option>
+                      <option value="xtls-rprx-direct">xtls-rprx-direct（已弃用）</option>
+                    </select>
+                    <div class="sb-hint">仅在不使用传输层时可用</div>
+                  </div>
                 </div>
               </div>
 
-              <!-- Shadowsocks 配置 -->
-              <div v-if="formData.protocol === 'shadowsocks'" id="shadowsocksFields" class="mt-3">
-                <div class="alert alert-info">
-                  <i class="bi bi-info-circle"></i> <strong>Shadowsocks 2022 配置说明：</strong>
-                  <ul class="mb-0 mt-1">
-                    <li>SS2022 支持多用户独立密钥，每个用户密码独立、到期自动失效</li>
-                    <li>传统加密方式为单用户共享密码（所有用户共用节点密码）</li>
-                    <li>UDP 支持已默认启用（游戏、DNS）</li>
-                  </ul>
+              <!-- ═══ Shadowsocks ═══ -->
+              <div v-if="formData.protocol === 'shadowsocks'" id="shadowsocksFields"
+                   class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-lock"></i> Shadowsocks</div>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label class="form-label">加密方法 <span class="sb-req">*</span></label>
+                    <select class="form-select" v-model="formData.ss_method">
+                      <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm（32 字节，推荐）</option>
+                      <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm（16 字节）</option>
+                    </select>
+                  </div>
+                  <div class="col-12">
+                    <div class="sb-hint">
+                      <i class="bi bi-info-circle"></i>
+                      SS2022 支持多用户独立密钥，每个用户密码独立、到期自动失效；UDP 已默认启用。
+                    </div>
+                  </div>
                 </div>
-                <div class="mb-2">
-                  <label>加密方法 <span class="text-danger">*</span></label>
-                  <select class="form-select" v-model="formData.ss_method">
-                    <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm（16 字节密钥）</option>
-                    <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm（32 字节，推荐）</option>
-                  </select>
-                </div>
-
               </div>
 
-              <!-- Hysteria2 配置 -->
-              <div v-if="formData.protocol === 'hysteria2'" id="hysteria2Fields" class="mt-3">
-                <div class="alert alert-info">
-                  <i class="bi bi-info-circle"></i> <strong>Hysteria2 配置说明：</strong>
-                  <ul class="mb-0 mt-1">
-                    <li>基于 QUIC 协议（UDP），必须启用 TLS</li>
-                    <li>支持 Salamander 混淆对抗 DPI 检测</li>
-                    <li>速率控制使用 Brutal 拥塞控制算法</li>
-                  </ul>
-                </div>
-                
-                <h6 class="mb-2"><i class="bi bi-shield-lock"></i> 认证配置</h6>
-                <div class="mb-3">
-                  <small class="text-muted">
-                    <i class="bi bi-info-circle"></i>
-                    每个用户使用各自的密码（即用户 UUID），无需在此设置共享密码。
-                  </small>
-                </div>
-                
-                <h6 class="mb-2"><i class="bi bi-speedometer2"></i> Brutal 速率控制</h6>
-                <div class="row mb-3">
-                  <div class="col-md-6 mb-2">
-                    <label>上行带宽 (Mbps)</label>
+              <!-- ═══ Hysteria2 ═══ -->
+              <div v-if="formData.protocol === 'hysteria2'" id="hysteria2Fields"
+                   class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-lightning-charge"></i> Hysteria2</div>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label class="form-label">上行带宽 (Mbps)</label>
                     <input type="number" class="form-control" v-model.number="formData.hy2_up_mbps" min="0" max="10000">
-                    <small class="text-muted">0 = 不限速（与 233boy 默认一致）</small>
                   </div>
-                  <div class="col-md-6 mb-2">
-                    <label>下行带宽 (Mbps)</label>
+                  <div class="col-sm-6">
+                    <label class="form-label">下行带宽 (Mbps)</label>
                     <input type="number" class="form-control" v-model.number="formData.hy2_down_mbps" min="0" max="10000">
-                    <small class="text-muted">0 = 不限速（与 233boy 默认一致）</small>
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label">混淆类型</label>
+                    <select class="form-select" v-model="formData.hy2_obfs">
+                      <option value="">不启用混淆</option>
+                      <option value="salamander">Salamander（推荐）</option>
+                    </select>
+                  </div>
+                  <div class="col-sm-6" v-if="formData.hy2_obfs === 'salamander'" id="hy2ObfsFields">
+                    <label class="form-label">混淆密码 <span class="sb-req">*</span></label>
+                    <input type="text" class="form-control" v-model="formData.hy2_obfs_password"
+                           placeholder="与认证密码不同">
+                  </div>
+                  <div class="col-12">
+                    <div class="sb-hint">
+                      <i class="bi bi-info-circle"></i>
+                      带宽填 0 表示不限速（与 233boy 默认一致）；每个用户使用各自的密码（即用户 UUID）。
+                    </div>
                   </div>
                 </div>
-                
-                <h6 class="mb-2"><i class="bi bi-eyeglasses"></i> 混淆设置</h6>
-                <div class="mb-2">
-                  <label>混淆类型</label>
-                  <select class="form-select" v-model="formData.hy2_obfs">
-                    <option value="">不启用混淆</option>
-                    <option value="salamander">Salamander（推荐）</option>
-                  </select>
-                </div>
-                <div v-if="formData.hy2_obfs === 'salamander'" id="hy2ObfsFields">
-                  <div class="mb-2">
-                    <label>混淆密码 <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" v-model="formData.hy2_obfs_password" placeholder="混淆密码（与认证密码不同）">
-                    <small class="text-muted">用于混淆 QUIC 流量，防止被 DPI 识别</small>
+              </div>
+
+              <!-- ═══ TUIC ═══ -->
+              <div v-if="formData.protocol === 'tuic'" id="tuicFields"
+                   class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-lightning"></i> TUIC</div>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label class="form-label">拥塞控制算法</label>
+                    <select class="form-select" v-model="formData.tuic_congestion">
+                      <option value="bbr">bbr（推荐）</option>
+                      <option value="cubic">cubic</option>
+                      <option value="new_reno">new_reno</option>
+                    </select>
+                  </div>
+                  <div class="col-sm-6 d-flex align-items-end">
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" v-model="formData.tuic_zero_rtt"
+                             id="tuicZeroRtt" role="switch">
+                      <label class="form-check-label" for="tuicZeroRtt">启用 0-RTT 握手</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="sb-hint">
+                      <i class="bi bi-info-circle"></i>
+                      基于 QUIC（UDP），ALPN 固定 h3；每个用户使用各自的密码（即用户 UUID）。
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- TUIC 配置 -->
-              <div v-if="formData.protocol === 'tuic'" id="tuicFields" class="mt-3">
-                <div class="alert alert-info">
-                  <i class="bi bi-info-circle"></i> <strong>TUIC 配置说明：</strong>
-                  <ul class="mb-0 mt-1">
-                    <li>基于 QUIC（UDP），必须启用 TLS，ALPN 固定 h3</li>
-                    <li>拥塞控制默认 bbr，弱网下表现更好</li>
-                  </ul>
-                </div>
-                <div class="mb-2">
-                  <small class="text-muted">
-                    <i class="bi bi-info-circle"></i>
-                    每个用户使用各自的密码（即用户 UUID），无需在此设置共享密码。
-                  </small>
-                </div>
-                <div class="mb-2">
-                  <label>拥塞控制算法</label>
-                  <select class="form-select" v-model="formData.tuic_congestion">
-                    <option value="bbr">bbr（推荐）</option>
-                    <option value="cubic">cubic</option>
-                    <option value="new_reno">new_reno</option>
-                  </select>
-                </div>
-                <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" v-model="formData.tuic_zero_rtt" id="tuicZeroRtt" role="switch">
-                  <label class="form-check-label" for="tuicZeroRtt">启用 0-RTT 握手</label>
+              <!-- ═══ Socks ═══ -->
+              <div v-if="formData.protocol === 'socks'" id="socksFields"
+                   class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-plug"></i> Socks5</div>
+                <div class="sb-hint">
+                  <i class="bi bi-info-circle"></i>
+                  每个用户独立认证：用户名 = 用户名称，密码 = 用户 UUID；不支持 TLS 与传输层。
                 </div>
               </div>
 
-              <!-- Socks 配置 -->
-              <div v-if="formData.protocol === 'socks'" id="socksFields" class="mt-3">
-                <div class="alert alert-info">
-                  <i class="bi bi-info-circle"></i> <strong>Socks5 配置说明：</strong>
-                  <ul class="mb-0 mt-1">
-                    <li>每个用户使用独立认证：用户名 = 用户名称，密码 = 用户 UUID</li>
-                    <li>不支持 TLS 与传输层</li>
-                  </ul>
+              <!-- ═══ Naive ═══ -->
+              <div v-if="formData.protocol === 'naive'" id="naiveFields"
+                   class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-incognito"></i> Naive</div>
+                <div class="sb-hint">
+                  <i class="bi bi-info-circle"></i>
+                  基于 HTTP/2 或 HTTP/3（QUIC），强制 TLS；每个用户独立 username + password。
+                  客户端：naiveproxy、sing-box 1.13.0+。
                 </div>
               </div>
 
-              <!-- Naive 配置 -->
-              <div v-if="formData.protocol === 'naive'" id="naiveFields" class="mt-3">
-                <div class="alert alert-info">
-                  <i class="bi bi-info-circle"></i> <strong>Naive 配置说明：</strong>
-                  <ul class="mb-0 mt-1">
-                    <li>Naive 协议基于 HTTP/2 或 HTTP/3（QUIC）</li>
-                    <li>必须配置 TLS 证书（下方自动显示证书配置）</li>
-                    <li>每个用户使用独立的 username + password 认证</li>
-                    <li>客户端支持：naiveproxy、sing-box 1.13.0+</li>
-                    <li>适合对抗深度包检测（DPI）</li>
-                  </ul>
+              <!-- ═══ 备注与状态 ═══ -->
+              <div class="sb-form-section">
+                <div class="sb-form-section-title"><i class="bi bi-card-text"></i> 备注与状态</div>
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label">备注</label>
+                    <textarea class="form-control" v-model="formData.notes" rows="2"
+                              placeholder="可选，输入节点的备注信息"></textarea>
+                  </div>
+                  <div class="col-12">
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" role="switch"
+                             v-model="formData.enabled" id="nodeEnabled">
+                      <label class="form-check-label" for="nodeEnabled">启用节点</label>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div class="mb-3 mt-3">
-                <label>备注</label>
-                <textarea class="form-control" v-model="formData.notes" rows="2" placeholder="可选，输入节点的备注信息"></textarea>
-              </div>
-
-              <div class="form-check form-switch mt-3">
-                <input class="form-check-input" type="checkbox" role="switch" v-model="formData.enabled" id="nodeEnabled">
-                <label class="form-check-label" for="nodeEnabled">启用节点</label>
               </div>
             </div>
             <div class="modal-footer">
@@ -439,7 +492,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, inject, watch } from 'vue'
+import { ref, computed, onMounted, inject, watch, nextTick } from 'vue'
 import { MAIN_PROTOCOLS, getBranches, detectBranch, type ProtocolBranch } from '@/utils/protocolBranches'
 import { Modal } from 'bootstrap'
 import { getNodes, createNode, updateNode, deleteNode, getConfig, generateRealityKeys as apiGenerateRealityKeys, type Node } from '@/api'
@@ -500,6 +553,20 @@ function applyBranch(b: ProtocolBranch) {
   if (p.ssObfs !== undefined) f.ss_obfs_mode = p.ssObfs
   if (p.hy2Obfs !== undefined) f.hy2_obfs = p.hy2Obfs
   if (p.congestion !== undefined) f.tuic_congestion = p.congestion
+  // 窄屏上分支胶囊是单行横向滚动，选中项可能在可视区外，
+  // 主动滚进来，否则用户看不到当前选的是哪个。
+  nextTick(() => {
+    const el = document.querySelector('.branch-pills .branch-pill.active') as HTMLElement | null
+    el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+    updatePillsScrollable()
+  })
+}
+
+/** 标记分支胶囊是否有横向溢出，用于决定是否显示右侧渐隐提示 */
+function updatePillsScrollable() {
+  const box = document.querySelector('.branch-pills') as HTMLElement | null
+  if (!box) return
+  box.classList.toggle('is-scrollable', box.scrollWidth > box.clientWidth + 1)
 }
 
 /** 依据当前表单状态反推命中的分支 */
