@@ -179,10 +179,13 @@ func (s *ServiceManager) updateUserHome(username, newHome string) {
 			break
 		}
 	}
-	// 先备份，再写入
-	_ = os.WriteFile("/etc/passwd.bak", data, 0600)
-	if err := os.WriteFile("/etc/passwd", []byte(strings.Join(lines, "\n")), 0644); err != nil {
-		log.Printf("写入 /etc/passwd 失败: %v", err)
+	// 不留 .bak：pwd 文件用「同目录临时文件 + rename」原子替换。
+	// 原内容已在上面的 data 里，失败时可直接回写，无需落盘备份。
+	if err := writeFileAtomic("/etc/passwd", []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		log.Printf("写入 /etc/passwd 失败: %v，正在还原", err)
+		if restoreErr := writeFileAtomic("/etc/passwd", data, 0644); restoreErr != nil {
+			log.Printf("还原 /etc/passwd 失败: %v", restoreErr)
+		}
 		return
 	}
 	log.Printf("已更新用户 %s 的 home 目录为 %s", username, newHome)
@@ -756,4 +759,39 @@ func NewServiceManager() *ServiceManager {
 	return &ServiceManager{
 		initSystem: detectInitSystem(),
 	}
+}
+
+// writeFileAtomic 用「同目录临时文件 + rename」原子写入，
+// 避免写一半崩溃留下损坏文件，也不产生 .bak 备份。
+func writeFileAtomic(path string, content []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpPath) }
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return err
+	}
+	return nil
 }

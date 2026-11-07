@@ -697,7 +697,6 @@ func (a *Agent) handleDeployFile(msg *Message) (*Message, error) {
 		Path       string `json:"path"`
 		Content    string `json:"content"`
 		Mode       int    `json:"mode"`
-		Backup     bool   `json:"backup"`
 		RestartSvc string `json:"restart_svc"`
 	}
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
@@ -722,13 +721,6 @@ func (a *Agent) handleDeployFile(msg *Message) (*Message, error) {
 		return nil, fmt.Errorf("解码内容失败: %v", err)
 	}
 
-	// 备份
-	if data.Backup {
-		if _, err := os.Stat(safePath); err == nil {
-			backupPath := safePath + ".bak." + time.Now().Format("20060102150405")
-			os.Rename(safePath, backupPath)
-		}
-	}
 
 	// 确保目录存在
 	dir := filepath.Dir(safePath)
@@ -811,7 +803,6 @@ func (a *Agent) handleDeployDir(msg *Message) (*Message, error) {
 		Files  map[string]string `json:"files"`
 		Modes  map[string]int    `json:"modes"`
 		Clean  bool              `json:"clean"`
-		Backup bool              `json:"backup"`
 	}
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
 		return nil, err
@@ -829,13 +820,6 @@ func (a *Agent) handleDeployDir(msg *Message) (*Message, error) {
 		return nil, fmt.Errorf("路径不安全: %v", err)
 	}
 
-	// 备份
-	if data.Backup {
-		if _, err := os.Stat(safePath); err == nil {
-			backupPath := safePath + ".bak." + time.Now().Format("20060102150405")
-			os.Rename(safePath, backupPath)
-		}
-	}
 
 	// 清空目录
 	if data.Clean {
@@ -931,11 +915,21 @@ func (a *Agent) handleSyncConfig(msg *Message) (*Message, error) {
 	hash := md5.Sum([]byte(data.Content))
 	configVersion := hex.EncodeToString(hash[:])
 
-	log.Printf("配置已同步: %s (版本: %s)", configPath, configVersion[:8])
+	if installed.Changed() {
+		log.Printf("配置已同步: %s (版本: %s)", configPath, configVersion[:8])
+	} else {
+		log.Printf("配置未变化，跳过写入: %s (版本: %s)", configPath, configVersion[:8])
+	}
 
+	restarted := false
 	// 重启服务 (使用平台特定的服务管理器)
+	//
+	// 配置与磁盘上完全一致时不重启：部署按钮是强推送、会无条件走到这里，
+	// 但重启 sing-box 会瞬断所有已建立的连接。内容一字未变时重启毫无收益。
 	if data.Restart {
-		if err := serviceManager.RestartService(serviceName); err != nil {
+		if !installed.Changed() {
+			log.Printf("配置无变化，跳过重启: %s", serviceName)
+		} else if err := serviceManager.RestartService(serviceName); err != nil {
 			log.Printf("重启服务失败，正在恢复旧配置: %v", err)
 			if rollbackErr := rollbackInstalledConfig(installed); rollbackErr != nil {
 				log.Printf("恢复旧配置失败: %v", rollbackErr)
@@ -947,6 +941,7 @@ func (a *Agent) handleSyncConfig(msg *Message) (*Message, error) {
 			}
 			return nil, fmt.Errorf("重启失败: %w，已恢复旧配置", err)
 		} else {
+			restarted = true
 			log.Printf("服务已重启: %s", serviceName)
 		}
 	}
@@ -955,6 +950,8 @@ func (a *Agent) handleSyncConfig(msg *Message) (*Message, error) {
 		"success":        true,
 		"path":           configPath,
 		"config_version": configVersion,
+		"changed":        installed.Changed(),
+		"restarted":      restarted,
 	})
 	return &Message{Type: MsgTypeCommandResp, Data: respData}, nil
 }
@@ -1555,20 +1552,16 @@ func (a *Agent) handleSelfUpdate(msg *Message) {
 		}
 	}
 
-	// 备份旧版本
-	backupPath := execPath + ".bak"
-	os.Remove(backupPath) // 删除旧备份
-	if err := os.Rename(execPath, backupPath); err != nil {
-		log.Printf("备份旧版本失败: %v", err)
-		os.Remove(tempPath)
-		return
-	}
-
-	// 替换为新版本
+	// 直接原子替换，不留 .bak。
+	//
+	// 旧实现先把自身 rename 成 .bak 再放新文件，好处是能回滚，但会在
+	// 安装目录留下一个近百 MB 的 .bak 可执行文件且永不清除。
+	// 这里改成：tempPath 与本二进制同目录，rename 覆盖是原子操作；
+	// 正在运行的进程持有旧 inode，直到重启才切换，不会写坏自己。
+	// 代价是失败时无法自动回滚二进制 —— 由面板重新下发 self_update 即可。
 	if err := os.Rename(tempPath, execPath); err != nil {
 		log.Printf("替换新版本失败: %v", err)
-		// 恢复旧版本
-		os.Rename(backupPath, execPath)
+		os.Remove(tempPath)
 		return
 	}
 
